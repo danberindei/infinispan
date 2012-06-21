@@ -67,7 +67,7 @@ public class NewDefaultConsistentHash implements NewAdvancedConsistentHash {
 
    @Override
    public int getHashWheelSegment(Object key) {
-      return hashFunction.hash(key) % numSegments;
+      return Math.abs(hashFunction.hash(key) % numSegments);
    }
 
    @Override
