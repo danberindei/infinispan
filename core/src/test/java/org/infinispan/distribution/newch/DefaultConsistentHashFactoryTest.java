@@ -32,13 +32,10 @@ import org.infinispan.remoting.transport.Address;
 import org.infinispan.test.AbstractInfinispanTest;
 import org.testng.annotations.Test;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertSame;
-import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.*;
 
 @Test(groups = "unit", testName = "distribution.NewDefaultConsistentHashTest")
-public class NewDefaultConsistentHashFactoryTest extends AbstractInfinispanTest {
+public class DefaultConsistentHashFactoryTest extends AbstractInfinispanTest {
 
    private static int iterationCount = 0;
 
@@ -62,7 +59,7 @@ public class NewDefaultConsistentHashFactoryTest extends AbstractInfinispanTest 
             if (nn < ns) {
                for (int k = 0; k < numOwners.length; k++) {
                   int no = numOwners[k];
-                  DefaultConsistentHash ch = (DefaultConsistentHash) chf.createConsistentHash(hashFunction, no, ns, nodes);
+                  DefaultConsistentHash ch = (DefaultConsistentHash) chf.create(hashFunction, no, ns, nodes);
                   checkDistribution(ch, false);
 
                   testConsistentHashModifications(chf, ch);
@@ -123,9 +120,9 @@ public class NewDefaultConsistentHashFactoryTest extends AbstractInfinispanTest 
       int numOwners = baseCH.getNumOwners();
 
       // check that the base CH is already balanced
-      assertSame(baseCH, chf.updateConsistentHashMembers(baseCH, baseCH.getMembers()));
-      assertSame(baseCH, chf.rebalanceConsistentHash(baseCH, true));
-      assertSame(baseCH, chf.rebalanceConsistentHash(baseCH, false));
+      assertSame(baseCH, chf.updateMembers(baseCH, baseCH.getMembers()));
+      assertSame(baseCH, chf.rebalance(baseCH, true));
+      assertSame(baseCH, chf.rebalance(baseCH, false));
 
       // starting point, so that we don't confuse nodes
       int nodeIndex = baseCH.getMembers().size();
@@ -150,7 +147,7 @@ public class NewDefaultConsistentHashFactoryTest extends AbstractInfinispanTest 
 
          // first phase: just update the members list, removing the leavers
          // and adding new owners, but not necessarily assigning segments to them
-         DefaultConsistentHash updatedMembersCH = (DefaultConsistentHash) chf.updateConsistentHashMembers(baseCH,
+         DefaultConsistentHash updatedMembersCH = (DefaultConsistentHash) chf.updateMembers(baseCH,
                newMembers);
          if (nodesToRemove > 0) {
             for (int l = 0; l < updatedMembersCH.getNumSegments(); l++) {
@@ -159,8 +156,7 @@ public class NewDefaultConsistentHashFactoryTest extends AbstractInfinispanTest 
          }
 
          // second phase: rebalance with the new members list
-         DefaultConsistentHash inclRebalancedCH = (DefaultConsistentHash) chf.rebalanceConsistentHash(updatedMembersCH,
-               true);
+         DefaultConsistentHash inclRebalancedCH = (DefaultConsistentHash) chf.rebalance(updatedMembersCH, true);
          checkDistribution(inclRebalancedCH, true);
 
          for (int l = 0; l < inclRebalancedCH.getNumSegments(); l++) {
@@ -169,10 +165,8 @@ public class NewDefaultConsistentHashFactoryTest extends AbstractInfinispanTest 
          }
 
          // third phase: prune extra owners
-         DefaultConsistentHash exclRebalancedCH = (DefaultConsistentHash) chf.rebalanceConsistentHash(updatedMembersCH,
-               false);
-         DefaultConsistentHash exclRebalancedCH2 = (DefaultConsistentHash) chf.rebalanceConsistentHash(inclRebalancedCH,
-               false);
+         DefaultConsistentHash exclRebalancedCH = (DefaultConsistentHash) chf.rebalance(updatedMembersCH, false);
+         DefaultConsistentHash exclRebalancedCH2 = (DefaultConsistentHash) chf.rebalance(inclRebalancedCH, false);
          // TODO sometimes the order of the backup owners is not the same  because the a node may be removed and then re-added at the end of the list
          //assertEquals(exclRebalancedCH2, exclRebalancedCH);
          checkDistribution(exclRebalancedCH, false);
@@ -186,4 +180,3 @@ public class NewDefaultConsistentHashFactoryTest extends AbstractInfinispanTest 
       }
    }
 }
-

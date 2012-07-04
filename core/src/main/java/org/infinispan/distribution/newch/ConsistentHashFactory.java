@@ -31,6 +31,7 @@ import org.infinispan.remoting.transport.Address;
  * @since 5.2
  */
 public interface ConsistentHashFactory {
+
    /**
     * Create a new consistent hash instance.
     *
@@ -41,7 +42,7 @@ public interface ConsistentHashFactory {
     *                    of segments for performance, or may ignore the parameter altogether.
     * @param members A list of addresses representing the new cache members.
     */
-   ConsistentHash createConsistentHash(Hash hashFunction, int numOwners, int numSegments, List<Address> members);
+   ConsistentHash create(Hash hashFunction, int numOwners, int numSegments, List<Address> members);
 
    /**
     * Create a new consistent hash instance, based on an existing instance, but with a new list of members.
@@ -55,7 +56,7 @@ public interface ConsistentHashFactory {
     * @return A new {@link ConsistentHash} instance, or {@code baseCH} if the existing instance
     *         does not need any changes.
     */
-   ConsistentHash updateConsistentHashMembers(ConsistentHash baseCH, List<Address> newMembers);
+   ConsistentHash updateMembers(ConsistentHash baseCH, List<Address> newMembers);
 
    /**
     * Create a new consistent hash instance, based on an existing instance, but "balanced" according to
@@ -65,13 +66,13 @@ public interface ConsistentHashFactory {
     * owners. It must be possible to switch from the "intermediary" consistent hash that includes the
     * old owners to the new consistent hash without any state transfer.
     * <p/>
-    * {@code rebalanceConsistentHash(rebalanceConsistentHash(ch, true), false)} must be equivalent to
-    * as {@code rebalanceConsistentHash(ch, false)}.
+    * {@code rebalance(rebalance(ch, true), false)} must be equivalent to
+    * as {@code rebalance(ch, false)}.
     *
     * @param baseCH An existing consistent hash instance, should not be {@code null}
     * @param keepExistingOwners If {@code true}, only add new owners - don't remove any old owners owners.
     * @return A new {@link ConsistentHash} instance, or {@code baseCH} if the existing instance
     *         does not need any changes.
     */
-   ConsistentHash rebalanceConsistentHash(ConsistentHash baseCH, boolean keepExistingOwners);
+   ConsistentHash rebalance(ConsistentHash baseCH, boolean keepExistingOwners);
 }
