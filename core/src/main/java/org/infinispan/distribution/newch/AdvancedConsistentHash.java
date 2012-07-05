@@ -53,12 +53,12 @@ public interface AdvancedConsistentHash extends ConsistentHash {
    int getSegment(Object key);
 
    /**
-    * @return All the nodes that own a given hash space segment.
+    * @return All the nodes that own a given hash space segment. The returned list is a copy of the internal list.
     */
    List<Address> locateOwnersForSegment(int segmentId);
 
    /**
-    * @return The primary owner of a given hash space segment.
+    * @return The primary owner of a given hash space segment. This is equivalent to {@code locateOwnersForSegment(segmentId).get(0)} but is more efficient
     */
    Address locatePrimaryOwnerForSegment(int segmentId);
 }

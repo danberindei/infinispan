@@ -83,7 +83,7 @@ public interface ConsistentHash {
     *
     *
     * @param keys keys to locate.
-    * @return list of nodes that own at least one of the keys.
+    * @return set of nodes that own at least one of the keys.
     */
    Set<Address> locateAllOwners(Collection<Object> keys);
 
