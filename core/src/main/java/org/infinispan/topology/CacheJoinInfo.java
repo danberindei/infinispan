@@ -19,6 +19,12 @@
 
 package org.infinispan.topology;
 
+/**
+ * This class contains the information that a cache needs to supply to the coordinator when starting up.
+ *
+ * @author Dan Berindei
+ * @since 5.2
+ */
 public class CacheJoinInfo {
    private String consistentHashFactoryClass;
    private int numSegments;

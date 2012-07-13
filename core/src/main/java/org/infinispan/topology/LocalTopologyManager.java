@@ -26,7 +26,10 @@ import org.infinispan.factories.scopes.Scope;
 import org.infinispan.factories.scopes.Scopes;
 
 /**
+ * Runs on every node and handles the communication with the {@link ClusterTopologyManager}.
  *
+ * @author Dan Berindei
+ * @since 5.2
  */
 @Scope(Scopes.GLOBAL)
 interface LocalTopologyManager {

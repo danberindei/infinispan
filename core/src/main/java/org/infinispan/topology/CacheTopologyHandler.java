@@ -22,7 +22,10 @@ package org.infinispan.topology;
 import org.infinispan.distribution.newch.ConsistentHash;
 
 /**
+ * The link between {@link LocalTopologyManager} and {@StateTransferManager}.
  *
+ * @author Dan Berindei
+ * @since 5.2
  */
 interface CacheTopologyHandler {
    CacheTopology getStatus();

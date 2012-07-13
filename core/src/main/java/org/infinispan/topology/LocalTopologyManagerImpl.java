@@ -40,7 +40,10 @@ import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
 
 /**
+ * The {@code LocalTopologyManager} implementation.
  *
+ * @author Dan Berindei
+ * @since 5.2
  */
 class LocalTopologyManagerImpl implements LocalTopologyManager {
    private static Log log = LogFactory.getLog(LocalTopologyManagerImpl.class);

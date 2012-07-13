@@ -27,10 +27,14 @@ import org.infinispan.factories.scopes.Scopes;
 import org.infinispan.remoting.transport.Address;
 
 /**
+ * Processes cache membership changes and decides when to rebalance state between members.
+ * It is used both in distributed and replicated mode.
  *
+ * @author Dan Berindei
+ * @since 5.2
  */
 @Scope(Scopes.GLOBAL)
-interface DistributionPolicy {
+interface RebalancePolicy {
    /**
     * Initialize the policy for a cache, with an existing list of members.
     */

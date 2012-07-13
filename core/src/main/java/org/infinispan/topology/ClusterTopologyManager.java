@@ -24,30 +24,37 @@ import org.infinispan.factories.scopes.Scope;
 import org.infinispan.factories.scopes.Scopes;
 import org.infinispan.remoting.transport.Address;
 
-
+/**
+ * Maintains the list of members and performs rebalance operations.
+ * The {@link RebalancePolicy} actually decides when to perform the rebalance or how to update the
+ * consistent hash.
+ *
+ * @author Dan Berindei
+ * @since 5.2
+ */
 @Scope(Scopes.GLOBAL)
 interface ClusterTopologyManager {
    /**
-    * Used by {@link org.infinispan.topology.DistributionPolicy} to update the consistent hash on all the members,
+    * Used by {@link RebalancePolicy} to update the consistent hash on all the members,
     * without triggering a state transfer.
     * @param balancedCH Should be {@code null}, unless there is a state transfer already in progress.
     */
    void updateConsistentHash(String cacheName, ConsistentHash currentCH, ConsistentHash balancedCH);
 
    /**
-    * Used by {@link org.infinispan.topology.DistributionPolicy} to start a state transfer.
+    * Used by {@link RebalancePolicy} to start a state transfer.
     */
    void rebalance(String cacheName, int topologyId, ConsistentHash pendingCH);
 
 
    /**
-    * Updates the members list and notifies the {@link org.infinispan.topology.DistributionPolicy}.
+    * Updates the members list and notifies the {@link RebalancePolicy}.
     * @return The current consistent hash.
     */
    CacheTopology handleJoin(String cacheName, Address joiner, CacheJoinInfo joinInfo);
 
    /**
-    * Updates the members list and notifies the {@link org.infinispan.topology.DistributionPolicy}
+    * Updates the members list and notifies the {@link RebalancePolicy}
     */
    void handleLeave(String cacheName, Address leaver);
 

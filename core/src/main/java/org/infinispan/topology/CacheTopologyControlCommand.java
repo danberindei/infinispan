@@ -31,13 +31,11 @@ import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
 
 /**
- * A control command to coordinate the installation of cache views between the members of the cluster.
- * The coordinator will receive REQUEST_JOIN and REQUEST_LEAVE commands from the nodes starting or stopping a cache.
- * It then sends PREPARE_VIEW to all the nodes in the cluster.
- * If all nodes return a successful response, the coordinator then sends a COMMIT_VIEW command to everyone.
- * If there is a failure on one of the nodes, the coordinator cancels the view with a ROLLBACK_VIEW command.
+ * A control command for all cache membership/rebalance operations.
+ * It is not a {@code CacheRpcCommand} because it needs to run on the coordinator even when
+ * the coordinator doesn't have a certain cache running.
  *
- * @author Dan Berindei <dan@infinispan.org>
+ * @author Dan Berindei
  * @since 5.2
  */
 public class CacheTopologyControlCommand implements ReplicableCommand {

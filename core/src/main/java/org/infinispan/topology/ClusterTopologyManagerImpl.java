@@ -23,7 +23,12 @@ package org.infinispan.topology;
 import org.infinispan.distribution.newch.ConsistentHash;
 import org.infinispan.remoting.transport.Address;
 
-
+/**
+ * The {@code ClusterTopologyManager} implementation.
+ *
+ * @author Dan Berindei
+ * @since 5.2
+ */
 class ClusterTopologyManagerImpl implements ClusterTopologyManager {
    @Override
    public void updateConsistentHash(String cacheName, ConsistentHash currentCH, ConsistentHash balancedCH) {
