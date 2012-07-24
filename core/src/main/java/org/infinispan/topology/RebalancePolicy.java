@@ -42,10 +42,26 @@ interface RebalancePolicy {
 
    /**
     * Initialize the policy for an existing cache, after this node became the coordinator.
-    * @param cacheName
-    * @param existingCHs
     */
    void initCache(String cacheName, ConsistentHash... existingCHs);
 
-   void updateMembersList(String cacheName, List<Address> membersList);
+   /**
+    * Called when the membership of the cluster changes.
+    */
+   void updateMembersList(List<Address> membersList);
+
+   /**
+    * Called when a member joins or leaves an individual cache.
+    */
+   void updateMembersList(String cacheName, List<Address> joiners, List<Address> leavers);
+
+   /**
+    * Called when every member has completed receiving data.
+    */
+   void onRebalanceCompleted(String cacheName, int topologyId);
+
+   /**
+    * @return The current topology (current CH + pending CH) of a cache.
+    */
+   CacheTopology getTopology(String cacheName);
 }
