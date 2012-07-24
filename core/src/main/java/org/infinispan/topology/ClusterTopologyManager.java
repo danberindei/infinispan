@@ -46,7 +46,7 @@ interface ClusterTopologyManager {
    /**
     * Used by {@link RebalancePolicy} to start a state transfer.
     */
-   void rebalance(String cacheName, int topologyId, ConsistentHash pendingCH);
+   void rebalance(String cacheName, int topologyId, ConsistentHash currentCH, ConsistentHash pendingCH) throws Exception;
 
 
    /**

@@ -36,24 +36,27 @@ import org.infinispan.remoting.transport.Address;
 @Scope(Scopes.GLOBAL)
 interface RebalancePolicy {
    /**
-    * Initialize the policy for a cache, with an existing list of members.
+    * Initialize the policy for a cache, without a list of members.
+    * It won't have any effect if the cache is already initialized.
     */
-   void initCache(String cacheName, List<Address> memberList, CacheJoinInfo joinInfo);
+   void initCache(String cacheName, CacheJoinInfo joinInfo) throws Exception;
 
    /**
     * Initialize the policy for an existing cache, after this node became the coordinator.
+    * It will overwrite the current status of the cache, but it will not reset any pending join or leave
+    * operations.
     */
-   void initCache(String cacheName, ConsistentHash... existingCHs);
+   void initCache(String cacheName, List<CacheTopology> partitionTopologies);
 
    /**
-    * Called when the membership of the cluster changes.
+    * Called when the membership of the cluster changes. It updates the members list of each cache atomically.
     */
-   void updateMembersList(List<Address> membersList);
+   void updateMembersList(List<Address> membersList) throws Exception;
 
    /**
     * Called when a member joins or leaves an individual cache.
     */
-   void updateMembersList(String cacheName, List<Address> joiners, List<Address> leavers);
+   void updateMembersList(String cacheName, List<Address> joiners, List<Address> leavers) throws Exception;
 
    /**
     * Called when every member has completed receiving data.

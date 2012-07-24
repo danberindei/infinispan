@@ -1,6 +1,9 @@
 package org.infinispan.topology;
 
+import java.util.Collection;
+
 import org.infinispan.distribution.newch.ConsistentHash;
+import org.infinispan.remoting.transport.Address;
 
 /**
  * The status of a cache from a distribution/state transfer point of view.
@@ -35,5 +38,23 @@ class CacheTopology {
 
    public ConsistentHash getPendingCH() {
       return pendingCH;
+   }
+
+   public Collection<Address> getMembers() {
+      if (pendingCH != null)
+         return pendingCH.getMembers();
+      else
+         return currentCH.getMembers();
+   }
+
+   public ConsistentHash getReadConsistentHash() {
+      return currentCH;
+   }
+
+   public ConsistentHash getWriteConsistentHash() {
+      if (pendingCH != null)
+         return pendingCH;
+      else
+         return currentCH;
    }
 }
