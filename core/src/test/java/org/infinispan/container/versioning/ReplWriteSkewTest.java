@@ -28,11 +28,7 @@ import org.infinispan.context.InvocationContext;
 import org.infinispan.context.impl.TxInvocationContext;
 import org.infinispan.interceptors.InvocationContextInterceptor;
 import org.infinispan.interceptors.base.CommandInterceptor;
-import org.infinispan.remoting.transport.jgroups.JGroupsTransport;
 import org.infinispan.test.fwk.CleanupAfterMethod;
-import org.jgroups.protocols.TCP;
-import org.jgroups.stack.Protocol;
-import org.jgroups.stack.ProtocolStack;
 import org.testng.annotations.Test;
 
 import javax.transaction.RollbackException;
@@ -53,7 +49,7 @@ public class ReplWriteSkewTest extends AbstractClusteredWriteSkewTest {
    protected int clusterSize() {
       return 2;
    }
-   
+
    public void testWriteSkew() throws Exception {
       Cache<Object, Object> cache0 = cache(0);
       Cache<Object, Object> cache1 = cache(1);
@@ -70,8 +66,8 @@ public class ReplWriteSkewTest extends AbstractClusteredWriteSkewTest {
       // Induce a write skew
       cache1.put("hello", "world 3");
 
-      assert cache0.get("hello").equals("world 3");
       assert cache1.get("hello").equals("world 3");
+      assertEventuallyEquals(0, "hello", "world 3");
 
       tm(0).resume(t);
       cache0.put("hello", "world 2");
@@ -108,8 +104,8 @@ public class ReplWriteSkewTest extends AbstractClusteredWriteSkewTest {
       // Auto-commit is true
       cache1.put("hello", "world 3");
 
-      assert cache0.get("hello").equals("world 3");
-      assert cache0.get("hello2").equals("world 1");
+      assertEventuallyEquals(0, "hello", "world 3");
+      assertEventuallyEquals(0, "hello2", "world 1");
       assert cache1.get("hello").equals("world 3");
       assert cache1.get("hello2").equals("world 1");
 

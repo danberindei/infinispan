@@ -880,4 +880,7 @@ public interface Log extends BasicLogger {
          "Transaction is %s", id = 193)
    void timeoutWaitingUntilTransactionPrepared(String globalTx);
 
+   @LogMessage(level = WARN)
+   @Message(value = "Exception while sending the Prepare Response Command", id = 194)
+   void exceptionWhileSendingPrepareResponseCommand(@Cause Throwable t);
 }

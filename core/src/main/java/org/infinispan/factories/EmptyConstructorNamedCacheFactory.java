@@ -42,6 +42,8 @@ import org.infinispan.notifications.cachelistener.CacheNotifier;
 import org.infinispan.notifications.cachelistener.CacheNotifierImpl;
 import org.infinispan.statetransfer.StateTransferLock;
 import org.infinispan.statetransfer.StateTransferLockImpl;
+import org.infinispan.statetransfer.totalorder.TotalOrderStateTransferLockImpl;
+import org.infinispan.transaction.totalorder.DistParallelTotalOrderManager;
 import org.infinispan.transaction.totalorder.ParallelTotalOrderManager;
 import org.infinispan.transaction.totalorder.SequentialTotalOrderManager;
 import org.infinispan.transaction.totalorder.TotalOrderManager;
@@ -82,7 +84,11 @@ public class EmptyConstructorNamedCacheFactory extends AbstractNamedCacheCompone
                return componentType.cast(new ClusteringDependentLogic.AllNodesLogic());
             }
          } else {
-            return componentType.cast(new ClusteringDependentLogic.DistributionLogic());
+            if (configuration.isTotalOrder()) {
+               return componentType.cast(new ClusteringDependentLogic.TotalOrderDistributionLogic());
+            } else {
+               return componentType.cast(new ClusteringDependentLogic.DistributionLogic());
+            }
          }
       } else if (componentType.equals(InvocationContextContainer.class)) {
          componentImpl = configuration.isTransactionalCache() ? TransactionalInvocationContextContainer.class
@@ -103,7 +109,11 @@ public class EmptyConstructorNamedCacheFactory extends AbstractNamedCacheCompone
       } else if (componentType.equals(RecoveryAdminOperations.class)) {
          return (T) new RecoveryAdminOperations();
       } else if (componentType.equals(StateTransferLock.class)) {
-         return (T) new StateTransferLockImpl();
+         if (configuration.getTransactionProtocol().isTotalOrder()) {
+            return (T) new TotalOrderStateTransferLockImpl();
+         } else {
+            return (T) new StateTransferLockImpl();
+         }
       } else if (componentType.equals(EvictionManager.class)) {
          return (T) new EvictionManagerImpl();
       } else if (componentType.equals(LockContainer.class)) {
@@ -116,7 +126,11 @@ public class EmptyConstructorNamedCacheFactory extends AbstractNamedCacheCompone
          boolean needsMultiThreadValidation = configuration.getIsolationLevel() == IsolationLevel.REPEATABLE_READ &&
                configuration.isWriteSkewCheck() && !configuration.isUseSynchronizationForTransactions();
 
-         return needsMultiThreadValidation ? (T) new ParallelTotalOrderManager() : (T) new SequentialTotalOrderManager();
+         return needsMultiThreadValidation ?
+               (configuration.getCacheMode().isDistributed() ?
+                      (T) new DistParallelTotalOrderManager() :
+                      (T) new ParallelTotalOrderManager())
+               : (T) new SequentialTotalOrderManager();
       }
 
       throw new ConfigurationException("Don't know how to create a " + componentType.getName());

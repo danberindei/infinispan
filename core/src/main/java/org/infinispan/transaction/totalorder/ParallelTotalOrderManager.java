@@ -64,11 +64,12 @@ public class ParallelTotalOrderManager extends BaseTotalOrderManager {
 
       TotalOrderRemoteTransaction remoteTransaction = (TotalOrderRemoteTransaction) ctx.getCacheTransaction();
 
-      ParallelPrepareProcessor ppp = new ParallelPrepareProcessor(prepareCommand, ctx, invoker, remoteTransaction);
+      ParallelPrepareProcessor ppp = constructParallelPrepareProcessor(prepareCommand, ctx, invoker, remoteTransaction);
       Set<TxDependencyLatch> previousTxs = new HashSet<TxDependencyLatch>();
+      Set<Object> keysModified = getModifiedKeyFromModifications(remoteTransaction.getModifications());
 
       //this will collect all the count down latch corresponding to the previous transactions in the queue
-      for (Object key : remoteTransaction.getModifiedKeys()) {
+      for (Object key : keysModified) {
          TxDependencyLatch prevTx = keysLocked.put(key, remoteTransaction.getLatch());
          if (prevTx != null) {
             previousTxs.add(prevTx);
@@ -78,7 +79,7 @@ public class ParallelTotalOrderManager extends BaseTotalOrderManager {
       ppp.setPreviousTransactions(previousTxs);
 
       if (trace)
-         log.tracef("Transaction [%s] write set is %s", remoteTransaction.getLatch(), remoteTransaction.getModifiedKeys());
+         log.tracef("Transaction [%s] write set is %s", remoteTransaction.getLatch(), keysModified);
 
       validationExecutorService.execute(ppp);
    }
@@ -86,30 +87,44 @@ public class ParallelTotalOrderManager extends BaseTotalOrderManager {
    @Override
    public final void finishTransaction(TotalOrderRemoteTransaction remoteTransaction) {
       super.finishTransaction(remoteTransaction);
-      for (Object key : remoteTransaction.getModifiedKeys()) {
+      for (Object key : getModifiedKeyFromModifications(remoteTransaction.getModifications())) {
          this.keysLocked.remove(key, remoteTransaction.getLatch());
       }
    }
 
    /**
+    * constructs a new thread to be passed to the thread pool. this is overridden in distributed mode that has a different
+    * behavior
+    *
+    * @param prepareCommand      the prepare command
+    * @param txInvocationContext the context
+    * @param invoker             the next interceptor
+    * @param remoteTransaction   the remote transaction
+    * @return a new thread
+    */
+   protected ParallelPrepareProcessor constructParallelPrepareProcessor(PrepareCommand prepareCommand, TxInvocationContext txInvocationContext,
+                                                                        CommandInterceptor invoker, TotalOrderRemoteTransaction remoteTransaction) {
+      return new ParallelPrepareProcessor(prepareCommand, txInvocationContext, invoker, remoteTransaction);
+   }
+
+   /**
     * This class is used to validate transaction in repeatable read with write skew check
     */
-   private class ParallelPrepareProcessor implements Runnable {
+   protected class ParallelPrepareProcessor implements Runnable {
 
       //the set of others transaction's count down latch (it will be unblocked when the transaction finishes)
       private final Set<TxDependencyLatch> previousTransactions;
 
-      private TotalOrderRemoteTransaction remoteTransaction = null;
-
+      protected final TotalOrderRemoteTransaction remoteTransaction;
       protected final PrepareCommand prepareCommand;
-      protected final TxInvocationContext txInvocationContext;
+      private final TxInvocationContext txInvocationContext;
       private final CommandInterceptor invoker;
 
       private long creationTime = -1;
       private long processStartTime = -1;
       private long initializationEndTime = -1;
 
-      private ParallelPrepareProcessor(PrepareCommand prepareCommand, TxInvocationContext txInvocationContext,
+      protected ParallelPrepareProcessor(PrepareCommand prepareCommand, TxInvocationContext txInvocationContext,
                                        CommandInterceptor invoker, TotalOrderRemoteTransaction remoteTransaction) {
          if (prepareCommand == null || txInvocationContext == null || invoker == null) {
             throw new IllegalArgumentException("Arguments must not be null");
@@ -134,7 +149,7 @@ public class ParallelTotalOrderManager extends BaseTotalOrderManager {
        */
       protected void initializeValidation() throws Exception {
          String gtx = prepareCommand.getGlobalTransaction().prettyPrint();
-         //todo is this really needed?
+         //TODO is this really needed?
          invocationContextContainer.setContext(txInvocationContext);
 
          /*
@@ -215,18 +230,25 @@ public class ParallelTotalOrderManager extends BaseTotalOrderManager {
 
       /**
        * finishes the transaction, ie, mark the modification as applied and set the result (exception or not) invokes
-       * the method #finishTransaction if the transaction has the one phase commit set to true
+       * the method {@link this.finishTransaction} if the transaction has the one phase commit set to true
+       * @param result the prepare result
+       * @param exception true if the result is an exception
        */
       protected void finalizeProcessing(Object result, boolean exception) {
          remoteTransaction.markPreparedAndNotify();
-         updateLocalTransaction(result, exception, prepareCommand);
-         if (prepareCommand.isOnePhaseCommit() || exception) {
+         updateLocalTransaction(result, exception, prepareCommand.getGlobalTransaction());
+         if (prepareCommand.isOnePhaseCommit()) {
             markTxCompleted();
+         } else if (exception) {
+            finishTransaction(remoteTransaction);
+            //Note: I cannot remove from the remote table, otherwise, when the rollback arrives, it will create a
+            // new remote transaction!
          }
       }
 
-      private void markTxCompleted() {
+      protected void markTxCompleted() {
          finishTransaction(remoteTransaction);
+         transactionTable.removeRemoteTransaction(prepareCommand.getGlobalTransaction());
       }
    }
 
@@ -247,6 +269,11 @@ public class ParallelTotalOrderManager extends BaseTotalOrderManager {
          processingDuration.addAndGet(validationEndTime - initializationEndTime);
          numberOfTxValidated.incrementAndGet();
       }
+   }
+
+   @Override
+   public Set<TxDependencyLatch> getPendingCommittingTransaction() {
+      return new HashSet<TxDependencyLatch>(keysLocked.values());
    }
 
    @ManagedOperation(description = "Resets the statistics")

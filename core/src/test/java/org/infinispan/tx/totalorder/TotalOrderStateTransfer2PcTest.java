@@ -43,11 +43,6 @@ public class TotalOrderStateTransfer2PcTest extends StateTransferFunctionalTest 
       final Cache<Object, Object> cache1 = cm1.getCache(cacheName);
       cache0.put("k", "v");
       assertEquals(cache0.get("k"), "v");
-      eventually(new Condition() {
-         @Override
-         public boolean isSatisfied() throws Exception {
-            return "v".equals(cache1.get("k"));
-         }
-      });
+      assertEventuallyEquals(cache1, "k", "v");
    }
 }

@@ -58,8 +58,13 @@ public class VersionedDistStateTransferTest extends MultipleCacheManagersTest {
                .lockingMode(LockingMode.OPTIMISTIC)
                .syncCommitPhase(true);
 
+      amendConfig(builder);
+
       createCluster(builder, 4);
       waitForClusterToForm();
+   }
+
+   protected void amendConfig(ConfigurationBuilder builder) {
    }
 
    public void testStateTransfer() throws Exception {
@@ -71,7 +76,9 @@ public class VersionedDistStateTransferTest extends MultipleCacheManagersTest {
       MagicKey hello = new MagicKey(cache2, "hello");
       cache0.put(hello, "world");
 
-      for (Cache<Object, Object> c: caches()) assert "world".equals(c.get(hello));
+      for (Cache<Object, Object> c: caches()) {
+         assertEventuallyEquals(c, hello, "world");
+      }
 
       tm(1).begin();
       assert "world".equals(cache1.get(hello));
@@ -96,10 +103,10 @@ public class VersionedDistStateTransferTest extends MultipleCacheManagersTest {
          // Expected
       }
 
-      assert "new world".equals(cache0.get(hello));
-      assert "new world".equals(cache1.get(hello));
+      assertEventuallyEquals(0, hello, "new world");
+      assertEventuallyEquals(1, hello, "new world");
       // skip cache2, it has been killed.
-      assert "new world".equals(cache3.get(hello));
-      assert "new world".equals(cache3.get(hello));
+      assertEventuallyEquals(3, hello, "new world");
+      assertEventuallyEquals(4, hello, "new world");
    }
 }

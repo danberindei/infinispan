@@ -489,8 +489,16 @@ public class TransactionTable {
          remoteTransaction = txFactory.newRemoteTransaction(globalTransaction, currentViewId);
          RemoteTransaction existing = remoteTransactions.putIfAbsent(globalTransaction, remoteTransaction);
          if (existing != null) {
+            log.tracef("Returning a concurrent created remote transaction %s for global transaction %s",
+                      existing, globalTransaction.prettyPrint());
             remoteTransaction = existing;
+         } else {
+            log.tracef("Created a new remote transaction %s for global transaction %s",
+                       remoteTransaction, globalTransaction.prettyPrint());
          }
+      } else {
+         log.tracef("Returning a existing remote transaction %s for global transaction %s",
+                    remoteTransaction, globalTransaction.prettyPrint());
       }
 
       return remoteTransaction;

@@ -57,6 +57,8 @@ public class GlobalTransaction implements Cloneable {
    private transient int hash_code = -1;  // in the worst case, hashCode() returns 0, then increases, so we're safe here
    private transient boolean remote = false;
 
+   private int viewId;
+
    /**
     * empty ctor used by externalization.
     */
@@ -85,6 +87,13 @@ public class GlobalTransaction implements Cloneable {
       this.remote = remote;
    }
 
+   public int getViewId() {
+      return viewId;
+   }
+
+   public void setViewId(int viewId) {
+      this.viewId = viewId;
+   }
 
    @Override
    public int hashCode() {
@@ -142,6 +151,7 @@ public class GlobalTransaction implements Cloneable {
       public void writeObject(ObjectOutput output, T gtx) throws IOException {
          output.writeLong(gtx.id);
          output.writeObject(gtx.addr);
+         output.writeInt(gtx.viewId);
       }
 
       /**
@@ -155,6 +165,7 @@ public class GlobalTransaction implements Cloneable {
          T gtx = createGlobalTransaction();
          gtx.id = input.readLong();
          gtx.addr = (Address) input.readObject();
+         gtx.viewId = input.readInt();
          return gtx;
       }
    }

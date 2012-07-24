@@ -152,4 +152,12 @@ public abstract class BaseStateTransferTask {
       }
    }
 
+
+   /**
+    * this method is invoked before start pushing the state
+    */
+   protected void beforeStartPushing() {
+      //no-op, used in total order
+   }
+
 }

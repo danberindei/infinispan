@@ -73,9 +73,9 @@ public class StateTransferLockImpl implements StateTransferLock {
    private volatile boolean writesShouldBlock;
    private volatile boolean writesBlocked;
    private final ThreadLocal<Boolean> traceThreadWrites = new ThreadLocal<Boolean>();
-   private int blockingCacheViewId = NO_BLOCKING_CACHE_VIEW;
+   protected int blockingCacheViewId = NO_BLOCKING_CACHE_VIEW;
    // blockingCacheViewId, writesShouldBlock and writesBlocked should only be modified while holding lock and always in this order
-   private final Object lock = new Object();
+   protected final Object lock = new Object();
 
    // stored configuration options
    private boolean pessimisticLocking;

@@ -23,10 +23,12 @@ import org.infinispan.CacheException;
 import org.infinispan.commands.control.CacheViewControlCommand;
 import org.infinispan.config.ConfigurationException;
 import org.infinispan.config.GlobalConfiguration;
+import org.infinispan.configuration.cache.Configuration;
 import org.infinispan.factories.annotations.ComponentName;
 import org.infinispan.factories.annotations.Inject;
 import org.infinispan.factories.annotations.Start;
 import org.infinispan.factories.annotations.Stop;
+import org.infinispan.manager.EmbeddedCacheManager;
 import org.infinispan.notifications.Listener;
 import org.infinispan.notifications.cachemanagerlistener.CacheManagerNotifier;
 import org.infinispan.notifications.cachemanagerlistener.annotation.Merged;
@@ -41,15 +43,7 @@ import org.infinispan.util.concurrent.ConcurrentMapFactory;
 import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -89,6 +83,7 @@ import static org.infinispan.factories.KnownComponentNames.ASYNC_TRANSPORT_EXECU
  * in one of the partitions. For a full description of the view recovery algorithm see {@link #recoverViews()}
  *
  * @author Dan Berindei &lt;dan@infinispan.org&gt;
+ * @author Pedro Ruivo
  * @since 5.1
  */
 public class CacheViewsManagerImpl implements CacheViewsManager {
@@ -120,18 +115,21 @@ public class CacheViewsManagerImpl implements CacheViewsManager {
    private ExecutorService cacheViewInstallerExecutor;
    private ExecutorService asyncTransportExecutor;
 
+   private EmbeddedCacheManager cacheManager;
+
    public CacheViewsManagerImpl() {
    }
 
    @Inject
    public void init(CacheManagerNotifier cacheManagerNotifier, Transport transport,
                     @ComponentName(ASYNC_TRANSPORT_EXECUTOR) ExecutorService e,
-                    GlobalConfiguration globalConfiguration) {
+                    GlobalConfiguration globalConfiguration, EmbeddedCacheManager cacheManager) {
       this.cacheManagerNotifier = cacheManagerNotifier;
       this.transport = transport;
       this.asyncTransportExecutor = e;
       // TODO Try to implement a "total view installation time budget" instead of the current per-operation timeout
       this.timeout = globalConfiguration.getDistributedSyncTimeout();
+      this.cacheManager = cacheManager;
    }
 
    // Start after JGroupsTransport so that we have a view already
@@ -211,7 +209,7 @@ public class CacheViewsManagerImpl implements CacheViewsManager {
                CacheViewControlCommand.Type.REQUEST_JOIN, self);
          // If we get a SuspectException we can ignore it, the new coordinator will come asking for our state anyway
          Map<Address,Response> rspList = transport.invokeRemotely(Collections.singleton(coordinator), cmd,
-               ResponseMode.SYNCHRONOUS_IGNORE_LEAVERS, timeout, false, null, false);
+               ResponseMode.SYNCHRONOUS_IGNORE_LEAVERS, timeout, false, null, false, false);
          checkRemoteResponse(cacheName, cmd, rspList);
       }
    }
@@ -230,7 +228,7 @@ public class CacheViewsManagerImpl implements CacheViewsManager {
          final CacheViewControlCommand cmd = new CacheViewControlCommand(cacheName,
                CacheViewControlCommand.Type.REQUEST_LEAVE, self);
          // ignore any response from the other members
-         transport.invokeRemotely(members, cmd, ResponseMode.ASYNCHRONOUS, timeout, false, null, false);
+         transport.invokeRemotely(members, cmd, ResponseMode.ASYNCHRONOUS, timeout, false, null, false, false);
       } catch (Exception e) {
          log.debugf(e, "%s: Error while leaving cache view", cacheName);
       }
@@ -295,30 +293,44 @@ public class CacheViewsManagerImpl implements CacheViewsManager {
          throw new IllegalStateException("Cannot prepare cache view " + pendingView + ", some nodes already left the cluster: " + leavers);
 
 
-      // broadcast the command to the targets, which will skip the local node
-      Future<Map<Address, Response>> remoteFuture = asyncTransportExecutor.submit(new Callable<Map<Address, Response>>() {
-         @Override
-         public Map<Address, Response> call() throws Exception {
-            Map<Address, Response> rspList = transport.invokeRemotely(pendingView.getMembers(), cmd,
-                  ResponseMode.SYNCHRONOUS, timeout, false, null, false);
-            return rspList;
-         }
-      });
+      Configuration configuration = getConfiguration(cacheName);
 
-      // now invoke the command on the local node
-      Future<Object> localFuture = asyncTransportExecutor.submit(new Callable<Object>() {
-         @Override
-         public Object call() throws Exception {
-            handlePrepareView(cacheName, pendingView, committedView);
-            return null;
-         }
-      });
+      if (configuration.transaction().transactionProtocol().isTotalOrder()) {
+         boolean distributed = configuration.clustering().cacheMode().isDistributed();
+         //in total order, the coordinator must prcess the prepare view command.
+         List<Address> pendingViewMembers = new LinkedList<Address>(pendingView.getMembers());
+         pendingViewMembers.add(self);
 
-      // wait for the remote commands to finish
-      Map<Address, Response> rspList = remoteFuture.get(timeout, TimeUnit.MILLISECONDS);
-      checkRemoteResponse(cacheName, cmd, rspList);
-      // now wait for the local command
-      localFuture.get(timeout, TimeUnit.MILLISECONDS);
+         Map<Address, Response> rspList = transport.invokeRemotely(pendingViewMembers, cmd, ResponseMode.SYNCHRONOUS, timeout, false,
+                                                                   null, true, distributed);
+         checkRemoteResponse(cacheName, cmd, rspList);
+      } else {
+
+         // broadcast the command to the targets, which will skip the local node
+         Future<Map<Address, Response>> remoteFuture = asyncTransportExecutor.submit(new Callable<Map<Address, Response>>() {
+            @Override
+            public Map<Address, Response> call() throws Exception {
+               Map<Address, Response> rspList = transport.invokeRemotely(pendingView.getMembers(), cmd,
+                                                                         ResponseMode.SYNCHRONOUS, timeout, false, null, false, false);
+               return rspList;
+            }
+         });
+
+         // now invoke the command on the local node
+         Future<Object> localFuture = asyncTransportExecutor.submit(new Callable<Object>() {
+            @Override
+            public Object call() throws Exception {
+               handlePrepareView(cacheName, pendingView, committedView);
+               return null;
+            }
+         });
+
+         // wait for the remote commands to finish
+         Map<Address, Response> rspList = remoteFuture.get(timeout, TimeUnit.MILLISECONDS);
+         checkRemoteResponse(cacheName, cmd, rspList);
+         // now wait for the local command
+         localFuture.get(timeout, TimeUnit.MILLISECONDS);
+      }
       return pendingView;
    }
 
@@ -342,7 +354,7 @@ public class CacheViewsManagerImpl implements CacheViewsManager {
                CacheViewControlCommand.Type.ROLLBACK_VIEW, self, newViewId, null, committedViewId, null);
          // wait until we get all the responses, but ignore the results
          Map<Address, Response> rspList = transport.invokeRemotely(validTargets, cmd,
-               ResponseMode.SYNCHRONOUS_IGNORE_LEAVERS, timeout, false, null, false);
+               ResponseMode.SYNCHRONOUS_IGNORE_LEAVERS, timeout, false, null, false, false);
          checkRemoteResponse(cacheName, cmd, rspList);
       } catch (Throwable t) {
          log.cacheViewRollbackFailure(t, committedViewId, cacheName);
@@ -374,7 +386,7 @@ public class CacheViewsManagerImpl implements CacheViewsManager {
                CacheViewControlCommand.Type.COMMIT_VIEW, self, viewId);
          // wait until we get all the responses, but ignore the results
          Map<Address, Response> rspList = transport.invokeRemotely(validTargets, cmd,
-               ResponseMode.SYNCHRONOUS_IGNORE_LEAVERS, timeout, false, null, false);
+               ResponseMode.SYNCHRONOUS_IGNORE_LEAVERS, timeout, false, null, false, false);
          checkRemoteResponse(cacheName, cmd, rspList);
       } catch (Throwable t) {
          log.cacheViewCommitFailure(t, viewId, cacheName);
@@ -461,13 +473,22 @@ public class CacheViewsManagerImpl implements CacheViewsManager {
 
    @Override
    public void handlePrepareView(String cacheName, CacheView pendingView, CacheView committedView) throws Exception {
+      boolean isLocal = pendingView.contains(self);
+
+      if (getConfiguration(cacheName).transaction().transactionProtocol().isTotalOrder() &&
+            !isLocal && !isCoordinator) {
+         log.tracef("%s: Not processing prepare view for %s. It is a total order cache and we are not a member neither" +
+                          " the coordinator.", cacheName, pendingView);
+         return;
+      }
+
       CacheViewInfo cacheViewInfo = viewsInfo.get(cacheName);
       if (cacheViewInfo == null) {
          throw new IllegalStateException(String.format("Received prepare request for cache %s, which is not running", cacheName));
       }
 
       log.tracef("%s: Preparing cache view %s, committed view is %s", cacheName, pendingView, committedView);
-      boolean isLocal = pendingView.contains(self);
+
       if (!isLocal && !isCoordinator) {
          throw new IllegalStateException(String.format("%s: Received prepare cache view request, but we are not a member. View is %s",
                cacheName, pendingView));
@@ -660,7 +681,7 @@ public class CacheViewsManagerImpl implements CacheViewsManager {
                @Override
                public Map<Address, Response> call() throws Exception {
                   return transport.invokeRemotely(Collections.singleton(member), cmd,
-                        ResponseMode.SYNCHRONOUS_IGNORE_LEAVERS, timeout, true, null, false);
+                        ResponseMode.SYNCHRONOUS_IGNORE_LEAVERS, timeout, true, null, false, false);
                }
             });
             futures.add(future);
@@ -777,6 +798,20 @@ public class CacheViewsManagerImpl implements CacheViewsManager {
 
    public boolean isRunning() {
       return running;
+   }
+
+   /**
+    * returns the configuration of the cache defined by this name
+    * @param cacheName  the cache name
+    * @return           the configuration of the cache
+    */
+   private Configuration getConfiguration(String cacheName) {
+      //TODO find a better way to do it?
+      Configuration c = cacheManager.getCacheConfiguration(cacheName);
+      if (c == null) {
+         c = cacheManager.getDefaultCacheConfiguration();
+      }
+      return c;
    }
 
    /**

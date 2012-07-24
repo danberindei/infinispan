@@ -72,7 +72,7 @@ public class VersionedReplStateTransferTest extends MultipleCacheManagersTest {
       cache0.put("hello", "world");
 
       assert "world".equals(cache0.get("hello"));
-      assert "world".equals(cache1.get("hello"));
+      assertEventuallyEquals(1, "hello", "world");
 
       tm(1).begin();
       assert "world".equals(cache1.get("hello"));
@@ -99,7 +99,7 @@ public class VersionedReplStateTransferTest extends MultipleCacheManagersTest {
          // Expected
       }
 
-      assert "new world".equals(cache(1).get("hello"));
-      assert "new world".equals(cache(2).get("hello"));
+      assertEventuallyEquals(1, "hello", "new world");
+      assertEventuallyEquals(2, "hello", "new world");
    }
 }

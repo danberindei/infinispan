@@ -50,7 +50,7 @@ import static org.infinispan.context.Flag.SKIP_LOCKING;
 public class DistributedStateTransferManagerImpl extends BaseStateTransferManagerImpl {
    private static final Log log = LogFactory.getLog(DistributedStateTransferManagerImpl.class);
 
-   private DistributionManager dm;
+   protected DistributionManager dm;
 
    /**
     * Default constructor

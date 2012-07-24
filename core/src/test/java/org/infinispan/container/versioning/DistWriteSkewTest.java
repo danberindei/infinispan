@@ -68,9 +68,9 @@ public class DistWriteSkewTest extends AbstractClusteredWriteSkewTest {
       // Induce a write skew
       cache3.put(hello, "world 3");
 
-      assert cache0.get(hello).equals("world 3");
-      assert cache1.get(hello).equals("world 3");
-      assert cache2.get(hello).equals("world 3");
+      assertEventuallyEquals(0, hello, "world 3");
+      assertEventuallyEquals(1, hello, "world 3");
+      assertEventuallyEquals(2, hello, "world 3");
       assert cache3.get(hello).equals("world 3");
 
       tm(1).resume(t);
@@ -117,10 +117,10 @@ public class DistWriteSkewTest extends AbstractClusteredWriteSkewTest {
       // Induce a write skew
       cache(nonOwners[1]).put(hello, "world 3");
 
-      assert cache0.get(hello).equals("world 3");
-      assert cache1.get(hello).equals("world 3");
-      assert cache2.get(hello).equals("world 3");
-      assert cache3.get(hello).equals("world 3");
+      assertEventuallyEquals(0, hello, "world 3");
+      assertEventuallyEquals(1, hello, "world 3");
+      assertEventuallyEquals(2, hello, "world 3");
+      assertEventuallyEquals(3, hello, "world 3");
 
       tm(nonOwners[0]).resume(t);
       cache(nonOwners[0]).put(hello, "world 2");
@@ -167,9 +167,9 @@ public class DistWriteSkewTest extends AbstractClusteredWriteSkewTest {
       cache3.put(hello, "world 3");
 
       for (Cache<Object, Object> c : caches()) {
-         assert "world 3".equals(c.get(hello));
-         assert "world 1".equals(c.get(hello2));
-         assert "world 1".equals(c.get(hello3));
+         assertEventuallyEquals(c, hello, "world 3");
+         assertEventuallyEquals(c, hello2, "world 1");
+         assertEventuallyEquals(c, hello3, "world 1");
       }
 
       tm(1).resume(t);
@@ -206,10 +206,10 @@ public class DistWriteSkewTest extends AbstractClusteredWriteSkewTest {
 
       cache1.remove(hello);
 
-      assert null == cache0.get(hello);
-      assert null == cache1.get(hello);
-      assert null == cache2.get(hello);
-      assert null == cache3.get(hello);
+      assertEventuallyEquals(0, hello, null);
+      assertEventuallyEquals(1, hello, null);
+      assertEventuallyEquals(2, hello, null);
+      assertEventuallyEquals(3, hello, null);
 
       tm(0).resume(t);
       cache0.put(hello, "world2");
@@ -265,9 +265,9 @@ public class DistWriteSkewTest extends AbstractClusteredWriteSkewTest {
       cache(0).put(hello, "world 2");
 
       assert cache0.get(hello).equals("world 2");
-      assert cache1.get(hello).equals("world 2");
-      assert cache2.get(hello).equals("world 2");
-      assert cache3.get(hello).equals("world 2");
+      assertEventuallyEquals(1, hello, "world 2");
+      assertEventuallyEquals(2, hello, "world 2");
+      assertEventuallyEquals(3, hello, "world 2");
 
       tm(2).resume(t);
       cache2.put(hello, "world 3");

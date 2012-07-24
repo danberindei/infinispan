@@ -62,6 +62,7 @@ import java.util.Map;
  * @author Bela Ban
  * @author Dan Berindei <dan@infinispan.org>
  * @author Mircea Markus
+ * @author Pedro Ruivo
  * @since 4.2
  */
 public class DistributedStateTransferTask extends BaseStateTransferTask {
@@ -112,6 +113,8 @@ public class DistributedStateTransferTask extends BaseStateTransferTask {
 
       if (configuration.isRehashEnabled() && !initialView) {
 
+         beforeStartPushing();
+
          // notify listeners that a rehash is about to start
          cacheNotifier.notifyDataRehashed(oldCacheSet, newCacheSet, newViewId, true);
 
@@ -144,7 +147,7 @@ public class DistributedStateTransferTask extends BaseStateTransferTask {
          }
          
          // Push locks if the cache is transactional and it is distributed
-         if (transactionTable != null) {
+         if (shouldPushLocks() && transactionTable != null) {
             log.debug("Starting lock migration");
             Map<Address, Collection<LockInfo>> locksToMigrate = new HashMap<Address, Collection<LockInfo>>();
             rebalanceLocks(numOwners, locksToMigrate, transactionTable.getRemoteTransactions());
@@ -270,6 +273,10 @@ public class DistributedStateTransferTask extends BaseStateTransferTask {
       if (!newOwners.contains(self)) {
          keysToRemove.add(key);
       }
+   }
+
+   protected boolean shouldPushLocks() {
+      return true;
    }
 
 }

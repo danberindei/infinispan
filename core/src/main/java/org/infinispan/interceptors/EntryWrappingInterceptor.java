@@ -315,6 +315,10 @@ public class EntryWrappingInterceptor extends CommandInterceptor {
    /**
     * total order condition: only commits when it is remote context and the prepare has the flag 1PC set
     * 2PC condition: only commits if the prepare has the flag 1PC set
+    *
+    * @param command the prepare command
+    * @param ctx the invocation context
+    * @return true if the modification should be committed, false otherwise
     */
    protected boolean shouldCommitEntries(PrepareCommand command, TxInvocationContext ctx) {
       //one phase commit in remote context in total order or it has no modifications (local commands)

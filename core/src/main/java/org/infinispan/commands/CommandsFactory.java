@@ -34,6 +34,7 @@ import org.infinispan.commands.read.SizeCommand;
 import org.infinispan.commands.read.ValuesCommand;
 import org.infinispan.commands.remote.ClusteredGetCommand;
 import org.infinispan.commands.remote.MultipleRpcCommand;
+import org.infinispan.commands.remote.PrepareResponseCommand;
 import org.infinispan.commands.remote.SingleRpcCommand;
 import org.infinispan.commands.remote.recovery.CompleteTransactionCommand;
 import org.infinispan.commands.remote.recovery.GetInDoubtTransactionsCommand;
@@ -371,4 +372,13 @@ public interface CommandsFactory {
     * @see ApplyDeltaCommand
     */
    ApplyDeltaCommand buildApplyDeltaCommand(Object deltaAwareValueKey, Delta delta, Collection keys);
+
+   /**
+    * Builds a PrepareResponseCommand used to send back a collection of keys validated by
+    * the keys owners or an exception (i.e. the outcome of the write skew check)
+    * 
+    * @param globalTransaction the transaction associated 
+    * @return instance
+    */
+   PrepareResponseCommand buildPrepareResponseCommand(GlobalTransaction globalTransaction);
 }

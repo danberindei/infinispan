@@ -129,8 +129,9 @@ public class SimpleTotalOrder1PcTest extends MultipleCacheManagersTest {
    public void testRemoveIfPresent() {
       cache(0).put("key", "value1");
       cache(1).put("key", "value2");
-      assert cache(0).get("key").equals("value2");
+
       assert cache(1).get("key").equals("value2");
+      assertEventuallyEquals(0, "key", "value2");
 
       cache(0).remove("key", "value");
 

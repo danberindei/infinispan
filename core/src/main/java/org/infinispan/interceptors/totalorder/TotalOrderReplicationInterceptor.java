@@ -5,6 +5,7 @@ import org.infinispan.context.impl.TxInvocationContext;
 import org.infinispan.factories.annotations.Inject;
 import org.infinispan.interceptors.ReplicationInterceptor;
 import org.infinispan.transaction.totalorder.TotalOrderManager;
+import org.infinispan.util.concurrent.TimeoutException;
 
 /**
  * @author mircea.markus@jboss.com
@@ -21,20 +22,23 @@ public class TotalOrderReplicationInterceptor extends ReplicationInterceptor {
 
    @Override
    public final Object visitPrepareCommand(TxInvocationContext ctx, PrepareCommand command) throws Throwable {
-      Object result = super.visitPrepareCommand(ctx, command);
-      if (shouldInvokeRemoteTxCommand(ctx)) {
-         // Because StateTransferLockInterceptor already acquired the state transfer lock on this thread,
-         // we could get in a deadlock with state transfer while waiting for the total order thread to do its work.
-         // So we release the state transfer lock while waiting, even though it's probably not optimal.
-         stateTransferLock.releaseForCommand(ctx, command);
-
-         //we need to do the waiting here and not in the TotalOrderInterceptor because it is possible for the replication
-         //not to take place, e.g. in the case there are no changes in the context. And this is the place where we know
-         // if the replication occurred.
-         totalOrderManager.waitForPrepareToSucceed(ctx);
-
-         stateTransferLock.acquireForCommand(ctx, command);
-      }
+      Object result;
+      boolean shouldRetransmit;
+      do {
+         try {
+            result = super.visitPrepareCommand(ctx, command);
+         } catch (TimeoutException e) {
+            //just ignore. it will be deliver for sure
+            result = null;
+         }
+         shouldRetransmit = false;
+         if (shouldInvokeRemoteTxCommand(ctx)) {
+            //we need to do the waiting here and not in the TotalOrderInterceptor because it is possible for the replication
+            //not to take place, e.g. in the case there are no changes in the context. And this is the place where we know
+            // if the replication occurred.
+            shouldRetransmit = totalOrderManager.waitForPrepareToSucceed(ctx);
+         }
+      } while (shouldRetransmit);
       return result;
    }
 }

@@ -42,8 +42,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Object that holds transaction's state on the node where it originated; as opposed to {@link RemoteTransaction}.
@@ -197,7 +195,7 @@ public abstract class LocalTransaction extends AbstractCacheTransaction {
    /**
     * Total order result
     */
-   private class PrepareResult extends CountDownLatch {
+   private class PrepareResult {
       //modifications are applied?
       private volatile boolean modificationsApplied;
       //is the result an exception?
@@ -205,8 +203,95 @@ public abstract class LocalTransaction extends AbstractCacheTransaction {
       //the validation result
       private volatile Object result;
 
-      public PrepareResult() {
-         super(1);
+      //for distribution:
+      //has a set of keys that are not validated yet
+      private Set<Object> keysMissingValidation;
+      //true if the transaction was locally prepared
+      private volatile boolean localPrepared;
+
+      //for state transfer
+      private volatile boolean markedToRetransmit;
+
+      public PrepareResult() {}
+
+      private synchronized void init(Collection<Object> affectedKeys) {
+         keysMissingValidation = new HashSet<Object>(affectedKeys);
+      }
+
+      private synchronized void waitForOutcome() throws Throwable {
+         if (!modificationsApplied && !markedToRetransmit) {
+            this.wait();
+         }
+         if (markedToRetransmit) {
+            //no op
+         } else if (!modificationsApplied) {
+            throw new TimeoutException("Unable to wait until modifications are applied");
+         } else if (exception) {
+            throw (Throwable) result;
+         }
+      }
+
+      private synchronized void addResultFromPrepare(Object result, boolean exception) {
+         log.tracef("Received prepare result %s, is exception? %s", result, exception);
+
+         modificationsApplied = true;
+         this.result = result;
+         this.exception = exception;
+
+         if (!exception && result != null && result instanceof EntryVersionsMap) {
+            setUpdatedEntryVersions(((EntryVersionsMap) result).merge(getUpdatedEntryVersions()));
+         }
+
+         this.notify();
+      }
+
+      private synchronized void addKeysValidated(Collection<Object> keysValidated, boolean local) {
+         if (modificationsApplied) {
+            return; //already prepared
+         }
+
+         keysMissingValidation.removeAll(keysValidated);
+         if (local) {
+            prepareResult.localPrepared = true;
+         }
+         checkIfPrepared();
+      }
+
+      private synchronized void addException(Exception exception, boolean local) {
+         if (modificationsApplied) {
+            return; //already prepared
+         }
+
+         result = exception;
+         this.exception = true;
+         keysMissingValidation = Collections.emptySet();
+
+         if (local) {
+            localPrepared = true;
+         }
+         checkIfPrepared();
+      }
+
+      private synchronized void markToRetransmit() {
+         markedToRetransmit = true;
+         this.notify();
+      }
+
+      private synchronized boolean isMarkedToRetransmitAndReset() {
+         boolean marked = markedToRetransmit;
+         markedToRetransmit = false;
+         return marked;
+      }
+
+      /**
+       * unblocks the thread if enough conditions are ok to mark the transaction as prepared
+       */
+      private void checkIfPrepared() {
+         //the condition is: the transaction was delivered locally and all keys are validated (or an exception)
+         if (prepareResult.localPrepared && prepareResult.keysMissingValidation.isEmpty()) {
+            prepareResult.modificationsApplied = true;
+            this.notify();
+         }
       }
    }
 
@@ -216,20 +301,8 @@ public abstract class LocalTransaction extends AbstractCacheTransaction {
     * @throws Throwable throw the validation result if it is an exception
     */
    public final void awaitUntilModificationsApplied() throws Throwable {
-
-      //if (!prepareResult.await(timeout, TimeUnit.MILLISECONDS)) {
-      //   throw new TimeoutException("Modifications not applied in " + timeout + " millis.");
-      //}
-      prepareResult.await();      
-
-      if (!prepareResult.modificationsApplied) {
-         throw new TimeoutException("Unable to wait until modifications are applied");
-      }
-      if (prepareResult.exception) {
-         throw (Throwable) prepareResult.result;
-      }
+      prepareResult.waitForOutcome();
    }
-
 
    /**
     * add the transaction result and notify
@@ -238,15 +311,40 @@ public abstract class LocalTransaction extends AbstractCacheTransaction {
     * @param exception is it an exception?
     */
    public void addPrepareResult(Object object, boolean exception) {
-      log.tracef("Received prepare result %s, is exception? %s", object, false);
-      prepareResult.modificationsApplied = true;
-      prepareResult.result = object;
-      prepareResult.exception = exception;
+      prepareResult.addResultFromPrepare(object, exception);      
+   }
 
-      if (!exception && object != null && object instanceof EntryVersionsMap) {
-         this.setUpdatedEntryVersions(((EntryVersionsMap) object).merge(this.getUpdatedEntryVersions()));
-      }
+   /**
+    * add a collection of keys successful validated (write skew check)
+    * @param keysValidated the keys validated
+    * @param local         if it is originated locally or remotely
+    */
+   public final void addKeysValidated(Collection<Object> keysValidated, boolean local) {
+      prepareResult.addKeysValidated(keysValidated, local);
+   }
 
-      prepareResult.countDown();
+   /**
+    * add an exception (write skew check fails)
+    * @param exception  the exception
+    * @param local      if it is originated locally or remotely
+    */
+   public final void addException(Exception exception, boolean local) {
+      prepareResult.addException(exception, local);
+   }
+
+   /**
+    * invoked before send the prepare command to init the collection of keys that needs validation
+    * @param affectedKeys  the collection of keys wrote by the transaction
+    */
+   public final void initToCollectAcks(Collection<Object> affectedKeys) {
+      prepareResult.init(affectedKeys);
+   }
+
+   public final void markToRetransmit() {
+      prepareResult.markToRetransmit();
+   }
+
+   public final boolean isMarkedToRetransmit() {
+      return prepareResult.isMarkedToRetransmitAndReset();
    }
 }

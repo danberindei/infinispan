@@ -113,7 +113,9 @@ public class RpcManagerImpl implements RpcManager {
       stateTransferEnabled = configuration.isStateTransferEnabled();
       statisticsEnabled = configuration.isExposeJmxStatistics();
 
-      if (configuration.isTotalOrder()) t.checkTotalOrderSupported();
+      if (configuration.isTotalOrder()) {
+         t.checkTotalOrderSupported(configuration.getCacheMode().isDistributed());
+      }
    }
 
    @ManagedAttribute(description = "Retrieves the committed view.")
@@ -164,7 +166,8 @@ public class RpcManagerImpl implements RpcManager {
                   responseFilter = new IgnoreExtraResponsesValidityFilter(cacheMembers, getAddress());
                }
             }
-            Map<Address, Response> result = t.invokeRemotely(recipients, rpcCommand, mode, timeout, usePriorityQueue, responseFilter, totalOrder);
+            boolean distribution = configuration.getCacheMode().isDistributed();
+            Map<Address, Response> result = t.invokeRemotely(recipients, rpcCommand, mode, timeout, usePriorityQueue, responseFilter, totalOrder, distribution);
             if (statisticsEnabled) replicationCount.incrementAndGet();
             return result;
          } catch (CacheException e) {

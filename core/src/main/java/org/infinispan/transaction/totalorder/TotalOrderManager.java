@@ -23,10 +23,11 @@ import org.infinispan.commands.tx.PrepareCommand;
 import org.infinispan.container.versioning.EntryVersionsMap;
 import org.infinispan.context.impl.TxInvocationContext;
 import org.infinispan.interceptors.base.CommandInterceptor;
-import org.infinispan.statetransfer.StateTransferInProgressException;
 import org.infinispan.transaction.LocalTransaction;
-import org.infinispan.transaction.totalorder.TotalOrderRemoteTransaction;
+import org.infinispan.transaction.TxDependencyLatch;
 import org.infinispan.transaction.xa.GlobalTransaction;
+
+import java.util.Set;
 
 /**
  * This class is responsible to validate transactions in the total order based protocol. It ensures the delivered order
@@ -71,7 +72,27 @@ public interface TotalOrderManager {
     */
    void addLocalTransaction(GlobalTransaction globalTransaction, LocalTransaction localTransaction);
 
-   void waitForPrepareToSucceed(TxInvocationContext context);
+   /**
+    * this method block the thread until the enough condition is enough to consider a transaction prepared (and later
+    * to ack the transaction manager)
+    * @param context the invocation context
+    * @return        true if the transaction should be retransmitted (state transfer in progress), false otherwise
+    */
+   boolean waitForPrepareToSucceed(TxInvocationContext context);
 
    void notifyStateTransferInProgress(GlobalTransaction globalTransaction, Throwable e);
+
+   /**
+    * return the local transaction associated to the global transaction
+    * @param globalTransaction   the global transaction
+    * @return the local transaction associated to the global transaction
+    */
+   LocalTransaction getLocalTransaction(GlobalTransaction globalTransaction);
+
+   /**
+    * returns a set of the transaction dependency latch that are actually committing
+    *
+    * @return  a set of the transaction dependency latch that are actually committing
+    */
+   Set<TxDependencyLatch> getPendingCommittingTransaction();
 }

@@ -105,24 +105,6 @@ public class TotalOrderState {
    }
 
    /**
-    * Gets a set of the modified keys from a collection of write commands
-    * @param modifications the collection of write commands
-    * @return a set of keys
-    */
-   public static Set<Object> getModifiedKeys(Collection<WriteCommand> modifications) {
-      if (modifications == null || modifications.size() == 0) {
-         return Collections.emptySet();
-      }
-
-      Set<Object> keys = new HashSet<Object>();
-      for (WriteCommand writeCommand : modifications) {
-         keys.addAll(writeCommand.getAffectedKeys());
-      }
-
-      return keys;
-   }
-
-   /**
     * Gets the latch associated to this remote transaction
     * @return the latch associated to this transaction
     */

@@ -24,9 +24,17 @@ package org.infinispan.util;
 
 import org.infinispan.CacheConfigurationException;
 import org.infinispan.CacheException;
+import org.infinispan.commands.write.ApplyDeltaCommand;
+import org.infinispan.commands.write.ClearCommand;
+import org.infinispan.commands.write.DataWriteCommand;
+import org.infinispan.commands.write.PutKeyValueCommand;
+import org.infinispan.commands.write.PutMapCommand;
+import org.infinispan.commands.write.RemoveCommand;
+import org.infinispan.commands.write.ReplaceCommand;
+import org.infinispan.commands.write.WriteCommand;
 import org.infinispan.commons.hash.Hash;
+import org.infinispan.container.DataContainer;
 import org.infinispan.marshall.Marshaller;
-import org.infinispan.transaction.xa.GlobalTransaction;
 
 import javax.naming.Context;
 import java.io.Closeable;
@@ -44,6 +52,7 @@ import java.nio.ByteBuffer;
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
@@ -67,7 +76,7 @@ public final class Util {
     * Loads the specified class using the passed classloader, or, if it is <code>null</code> the Infinispan classes'
     * classloader.
     * </p>
-    * 
+    *
     * <p>
     * If loadtime instrumentation via GenerateInstrumentedClassLoader is used, this class may be loaded by the bootstrap
     * classloader.
@@ -76,7 +85,7 @@ public final class Util {
     * If the class is not found, the {@link ClassNotFoundException} or {@link NoClassDefFoundError} is wrapped as a
     * {@link CacheConfigurationException} and is re-thrown.
     * </p>
-    * 
+    *
     * @param classname name of the class to load
     * @param cl the application classloader which should be used to load the class, or null if the class is always packaged with
     *        Infinispan
@@ -90,7 +99,7 @@ public final class Util {
          throw new CacheConfigurationException("Unable to instantiate class " + classname, e);
       }
    }
-   
+
    public static ClassLoader[] getClassLoaders(ClassLoader appClassLoader) {
       return new ClassLoader[] {
             appClassLoader,  // User defined classes
@@ -103,7 +112,7 @@ public final class Util {
     * <p>
     * Loads the specified class using the passed classloader, or, if it is <code>null</code> the Infinispan classes' classloader.
     * </p>
-    * 
+    *
     * <p>
     * If loadtime instrumentation via GenerateInstrumentedClassLoader is used, this class may be loaded by the bootstrap classloader.
     * </p>
@@ -223,28 +232,28 @@ public final class Util {
       Class<T> clazz = loadClassStrict(classname, cl);
       return getInstanceStrict(clazz);
    }
-   
+
    /**
     * Clones parameter x of type T with a given Marshaller reference;
-    * 
-    * 
+    *
+    *
     * @return a deep clone of an object parameter x 
     */
    @SuppressWarnings("unchecked")
    public static <T> T cloneWithMarshaller(Marshaller marshaller, T x){
       if (marshaller == null)
          throw new IllegalArgumentException("Cannot use null Marshaller for clone");
-      
+
       byte[] byteBuffer;
       try {
          byteBuffer = marshaller.objectToByteBuffer(x);
          return (T) marshaller.objectFromByteBuffer(byteBuffer);
       } catch (InterruptedException e) {
          Thread.currentThread().interrupt();
-         throw new CacheException(e);      
+         throw new CacheException(e);
       } catch (Exception e) {
          throw new CacheException(e);
-      }     
+      }
    }
 
 
@@ -584,5 +593,40 @@ public final class Util {
    public static int getNormalizedHash(Object key, Hash hashFct) {
       // more efficient impl
       return hashFct.hash(key) & Integer.MAX_VALUE; // make sure no negative numbers are involved.
+   }
+
+   /**
+    * it returns a set of keys touched by the modification collection
+    * @param modifications the modification collection
+    * @param dataContainer the data container. Some commands (ClearCommand) touches in all keys present in the data
+    *                      container
+    * @return a set of keys touched by the modification collection
+    */
+   public static Set<Object> getAffectedKeys(Collection<WriteCommand> modifications, DataContainer dataContainer) {
+      if (modifications == null) {
+         return Collections.emptySet();
+      }
+      Set<Object> set = new HashSet<Object>(modifications.size());
+      for (WriteCommand wc: modifications) {
+         switch (wc.getCommandId()) {
+            case ClearCommand.COMMAND_ID:
+               set.addAll(dataContainer.keySet());
+               break;
+            case PutKeyValueCommand.COMMAND_ID:
+            case RemoveCommand.COMMAND_ID:
+            case ReplaceCommand.COMMAND_ID:
+               set.add(((DataWriteCommand) wc).getKey());
+               break;
+            case PutMapCommand.COMMAND_ID:
+               set.addAll(wc.getAffectedKeys());
+               break;
+            case ApplyDeltaCommand.COMMAND_ID:
+               ApplyDeltaCommand command = (ApplyDeltaCommand) wc;
+               Object[] compositeKeys = command.getCompositeKeys();
+               set.addAll(Arrays.asList(compositeKeys));
+               break;
+         }
+      }
+      return set;
    }
 }

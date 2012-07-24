@@ -35,9 +35,11 @@ import java.util.List;
 @Test(groups = "functional", testName =  "distribution.rehash.RehashAfterPartitionMergeTest")
 public class RehashAfterPartitionMergeTest extends MultipleCacheManagersTest {
 
-   Cache<Object, Object> c1, c2;
-   List<Cache<Object, Object>> caches;
-   DISCARD d1, d2;
+   protected Cache<Object, Object> c1;
+   protected Cache<Object, Object> c2;
+   protected List<Cache<Object, Object>> caches;
+   protected DISCARD d1;
+   protected DISCARD d2;
 
    @Override
    protected void createCacheManagers() throws Throwable {

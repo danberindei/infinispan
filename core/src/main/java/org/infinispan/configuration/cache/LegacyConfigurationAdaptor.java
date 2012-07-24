@@ -505,6 +505,8 @@ public class LegacyConfigurationAdaptor {
         
       builder.unsafe().unreliableReturnValues(legacy.isUnsafeUnreliableReturnValues());
       
+      builder.versioning().enabled(legacy.isEnableVersioning()).scheme(legacy.getVersioningScheme());
+      
       return builder.build();
    }
 }

@@ -601,4 +601,13 @@ public abstract class MultipleCacheManagersTest extends AbstractCacheTest {
          }
       });
    }
+
+   protected void assertEventuallyEquals(final Cache cache, final Object key, final Object value) {
+      eventually(new Condition() {
+         @Override
+         public boolean isSatisfied() throws Exception {
+            return value == null ? value == cache.get(key) : value.equals(cache.get(key));
+         }
+      });
+   }
 }

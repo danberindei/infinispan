@@ -252,12 +252,16 @@ public class TransactionCoordinator {
    /**
     * a transaction can commit in one phase, in total order protocol, when the write skew is disable or the one phase
     * configuration parameter is set to true.
+    * 
+    * Note: in distribution, the 1PC optimization can't be done with the write skew check
     *
     * @return true if it can use 1PC false otherwise
     */
    private boolean isOnePhaseTotalOrder() {
-      return configuration.isTotalOrder() && (!configuration.isRequireVersioning() ||
-                                                    configuration.isUseSynchronizationForTransactions());
+      return configuration.isTotalOrder() &&
+            (!configuration.isRequireVersioning() || (
+                  configuration.isUseSynchronizationForTransactions() &&
+                        !configuration.getCacheMode().isDistributed()));
    }
 
    private static interface CommandCreator {

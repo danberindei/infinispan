@@ -54,6 +54,7 @@ import java.util.Set;
  *
  * @author Bela Ban
  * @author Dan Berindei <dan@infinispan.org>
+ * @author Pedro Ruivo
  * @since 4.2
  */
 public class ReplicatedStateTransferTask extends BaseStateTransferTask {
@@ -94,6 +95,9 @@ public class ReplicatedStateTransferTask extends BaseStateTransferTask {
             // We're keeping it inside a ByRef so that the replicate() method can reset it when it pushes a chunk
             // The transfer is on a separate thread so we can't modify the collection itself
             final ByRef<Collection<InternalCacheEntry>> state = new ByRef<Collection<InternalCacheEntry>>(new ArrayList<InternalCacheEntry>());
+
+            //for total order
+            beforeStartPushing();
 
             for (InternalCacheEntry ice : dataContainer) {
                replicate(ice.getKey(), ice, chOld, joiners, null, state);

@@ -276,4 +276,77 @@ public interface ClusteringDependentLogic {
          return rpcManager.getAddress();
       }
    }
+
+   /**
+    * Logic for the total order protocol in distribution mode
+    */
+   public static final class TotalOrderDistributionLogic implements ClusteringDependentLogic {
+
+      private DistributionManager dm;
+      private DataContainer dataContainer;
+      private Configuration configuration;
+      private RpcManager rpcManager;
+
+      @Inject
+      public void init(DistributionManager dm, DataContainer dataContainer, Configuration configuration, RpcManager rpcManager) {
+         this.dm = dm;
+         this.dataContainer = dataContainer;
+         this.configuration = configuration;
+         this.rpcManager = rpcManager;
+      }
+
+      @Override
+      public boolean localNodeIsOwner(Object key) {
+         return dm.getLocality(key).isLocal();
+      }
+
+      @Override
+      public boolean localNodeIsPrimaryOwner(Object key) {
+         return localNodeIsOwner(key);
+      }
+
+      @Override
+      public void commitEntry(CacheEntry entry, EntryVersion newVersion, boolean skipOwnershipCheck) {
+         boolean doCommit = true;
+         // ignore locality for removals, even if skipOwnershipCheck is not true
+         if (!skipOwnershipCheck && !entry.isRemoved() && !localNodeIsOwner(entry.getKey())) {
+            if (configuration.isL1CacheEnabled()) {
+               dm.transformForL1(entry);
+            } else {
+               doCommit = false;
+            }
+         }
+         if (doCommit) {
+            entry.commit(dataContainer, newVersion);
+         } else {
+            entry.rollback();
+         }
+      }
+
+      @Override
+      public Collection<Address> getOwners(Collection<Object> keys) {
+         return dm.getAffectedNodes(keys);
+      }
+
+      @Override
+      public EntryVersionsMap createNewVersionsAndCheckForWriteSkews(VersionGenerator versionGenerator, TxInvocationContext context, VersionedPrepareCommand prepareCommand) {
+         EntryVersionsMap updatedVersionMap = new EntryVersionsMap();
+
+         if (!context.hasFlag(Flag.SKIP_WRITE_SKEW_CHECK)) {
+            updatedVersionMap = performWriteSkewCheckAndReturnNewVersions(prepareCommand, dataContainer,
+                  versionGenerator, context,
+                  this);
+            context.getCacheTransaction().setUpdatedEntryVersions(updatedVersionMap);
+         } else {
+            updatedVersionMap.putAll(context.getCacheTransaction().getUpdatedEntryVersions());
+         }
+
+         return updatedVersionMap;
+      }
+
+      @Override
+      public Address getAddress() {
+         return rpcManager.getAddress();
+      }
+   }
 }

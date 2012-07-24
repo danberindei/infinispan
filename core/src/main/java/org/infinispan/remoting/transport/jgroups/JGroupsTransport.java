@@ -55,6 +55,7 @@ import org.jgroups.View;
 import org.jgroups.blocks.RspFilter;
 import org.jgroups.jmx.JmxConfigurator;
 import org.jgroups.protocols.SEQUENCER;
+import org.jgroups.protocols.tom.TOA;
 import org.jgroups.stack.AddressGenerator;
 import org.jgroups.util.Rsp;
 import org.jgroups.util.RspList;
@@ -94,6 +95,7 @@ import static org.infinispan.factories.KnownComponentNames.GLOBAL_MARSHALLER;
  *
  * @author Manik Surtani
  * @author Galder Zamarreño
+ * @author Pedro Ruivo
  * @since 4.0
  */
 public class JGroupsTransport extends AbstractTransport implements MembershipListener {
@@ -439,7 +441,7 @@ public class JGroupsTransport extends AbstractTransport implements MembershipLis
    // ------------------------------------------------------------------------------------------------------------------
 
    @Override
-   public Map<Address, Response> invokeRemotely(Collection<Address> recipients, ReplicableCommand rpcCommand, ResponseMode mode, long timeout, boolean usePriorityQueue, ResponseFilter responseFilter, boolean totalOrder)
+   public Map<Address, Response> invokeRemotely(Collection<Address> recipients, ReplicableCommand rpcCommand, ResponseMode mode, long timeout, boolean usePriorityQueue, ResponseFilter responseFilter, boolean totalOrder, boolean distribution)
          throws Exception {
 
       if (recipients != null && recipients.isEmpty()) {
@@ -467,39 +469,42 @@ public class JGroupsTransport extends AbstractTransport implements MembershipLis
       List<org.jgroups.Address> jgAddressList = toJGroupsAddressListExcludingSelf(recipients);
       int membersSize = members.size();
       boolean broadcast = jgAddressList == null || recipients.size() == membersSize;
-      if (!totalOrder && (membersSize < 3 || (jgAddressList != null && jgAddressList.size() < 2))) broadcast = false;
+      if (membersSize < 3 || (jgAddressList != null && jgAddressList.size() < 2)) broadcast = false;
       RspList<Object> rsps = null;
       Response singleResponse = null;
       org.jgroups.Address singleJGAddress = null;
 
-      if (broadcast) {
+      if (broadcast || (totalOrder && !distribution)) {
          rsps = dispatcher.broadcastRemoteCommands(rpcCommand, toJGroupsMode(mode), timeout, recipients != null,
                                                    usePriorityQueue, toJGroupsFilter(responseFilter),
-               asyncMarshalling, totalOrder);
-      } else {
-         if (jgAddressList == null || !jgAddressList.isEmpty()) {
-            boolean singleRecipient = !ignoreLeavers && jgAddressList != null && jgAddressList.size() == 1;
-            boolean skipRpc = false;
-            if (jgAddressList == null) {
-               ArrayList<Address> others = new ArrayList<Address>(members);
-               others.remove(self);
-               skipRpc = others.isEmpty();
-               singleRecipient = !ignoreLeavers && others.size() == 1;
-               if (singleRecipient) singleJGAddress = toJGroupsAddress(others.get(0));
-            }
-            if (!skipRpc) {
-               if (singleRecipient && !totalOrder) {
-                  if (singleJGAddress == null) singleJGAddress = jgAddressList.get(0);
-                  singleResponse = dispatcher.invokeRemoteCommand(singleJGAddress, rpcCommand, toJGroupsMode(mode), timeout,
-                                                                  usePriorityQueue, asyncMarshalling);
-               } else {
-                  rsps = dispatcher.invokeRemoteCommands(jgAddressList, rpcCommand, toJGroupsMode(mode), timeout,
-                                                         recipients != null, usePriorityQueue, toJGroupsFilter(responseFilter),
-                        asyncMarshalling, totalOrder);
-               }
+               asyncMarshalling, totalOrder, distribution);
+      } else if (totalOrder && distribution) {
+         rsps = dispatcher.invokeRemoteCommands(jgAddressList, rpcCommand, toJGroupsMode(mode), timeout,
+                                                recipients != null, usePriorityQueue, toJGroupsFilter(responseFilter),
+                                                asyncMarshalling, totalOrder, distribution);
+      } else if (jgAddressList == null || !jgAddressList.isEmpty()) {
+         boolean singleRecipient = jgAddressList != null && jgAddressList.size() == 1;
+         boolean skipRpc = false;
+         if (jgAddressList == null) {
+            ArrayList<Address> others = new ArrayList<Address>(members);
+            others.remove(self);
+            skipRpc = others.isEmpty();
+            singleRecipient = others.size() == 1;
+            if (singleRecipient) singleJGAddress = toJGroupsAddress(others.get(0));
+         }
+         if (!skipRpc) {
+            if (singleRecipient && !totalOrder) {
+               if (singleJGAddress == null) singleJGAddress = jgAddressList.get(0);
+               singleResponse = dispatcher.invokeRemoteCommand(singleJGAddress, rpcCommand, toJGroupsMode(mode), timeout,
+                                                               usePriorityQueue, asyncMarshalling);
+            } else {
+               rsps = dispatcher.invokeRemoteCommands(jgAddressList, rpcCommand, toJGroupsMode(mode), timeout,
+                                                      recipients != null, usePriorityQueue, toJGroupsFilter(responseFilter),
+                        asyncMarshalling, totalOrder, distribution);
             }
          }
       }
+
 
       if (mode.isAsynchronous())
          return Collections.emptyMap();// async case
@@ -687,10 +692,13 @@ public class JGroupsTransport extends AbstractTransport implements MembershipLis
    }
 
    @Override
-   public final void checkTotalOrderSupported() {
-      if (channel.getProtocolStack().findProtocol(SEQUENCER.class) == null)  {
+   public final void checkTotalOrderSupported(boolean distributed) {
+      if (!distributed && channel.getProtocolStack().findProtocol(SEQUENCER.class) == null)  {
          throw new ConfigurationException("In order to support total order based transaction, the SEQUENCER protocol " +
-                                                "must be present in the jgroups' config.");
+                                                "must be present in the JGroups's config.");
+      } else if (distributed && channel.getProtocolStack().findProtocol(TOA.class) == null) {
+         throw new ConfigurationException("In order to support total order based transaction, the TOA protocol " +
+                                                "must be present in the JGroups's config.");
       }
    }
 }

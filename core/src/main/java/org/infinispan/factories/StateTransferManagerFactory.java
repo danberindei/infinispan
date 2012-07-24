@@ -27,12 +27,15 @@ import org.infinispan.statetransfer.DistributedStateTransferManagerImpl;
 import org.infinispan.statetransfer.DummyInvalidationStateTransferManagerImpl;
 import org.infinispan.statetransfer.ReplicatedStateTransferManagerImpl;
 import org.infinispan.statetransfer.StateTransferManager;
+import org.infinispan.statetransfer.totalorder.TotalOrderDistributedStateTransferManagerImpl;
+import org.infinispan.statetransfer.totalorder.TotalOrderReplicatedStateTransferManagerImpl;
 
 /**
  * Constructs {@link org.infinispan.statetransfer.StateTransferManager} instances.
  *
  * @author Manik Surtani (<a href="mailto:manik@jboss.org">manik@jboss.org</a>)
  * @author Dan Berindei &lt;dan@infinispan.org&gt;
+ * @author Pedro Ruivo
  * @since 4.0
  */
 @DefaultFactoryFor(classes = StateTransferManager.class)
@@ -42,11 +45,19 @@ public class StateTransferManagerFactory extends AbstractNamedCacheComponentFact
       if (!configuration.getCacheMode().isClustered())
          return null;
 
-      if (configuration.getCacheMode().isDistributed())
-         return componentType.cast(new DistributedStateTransferManagerImpl());
-      else if (configuration.getCacheMode().isReplicated())
-         return componentType.cast(new ReplicatedStateTransferManagerImpl());
-      else if (configuration.getCacheMode().isInvalidation())
+      if (configuration.getCacheMode().isDistributed()) {
+         if (configuration.getTransactionProtocol().isTotalOrder()) {
+            return componentType.cast(new TotalOrderDistributedStateTransferManagerImpl());
+         } else {
+            return componentType.cast(new DistributedStateTransferManagerImpl());
+         }
+      }else if (configuration.getCacheMode().isReplicated()) {
+         if (configuration.getTransactionProtocol().isTotalOrder()) {
+            return componentType.cast(new TotalOrderReplicatedStateTransferManagerImpl());
+         } else {
+            return componentType.cast(new ReplicatedStateTransferManagerImpl());
+         }
+      } else if (configuration.getCacheMode().isInvalidation())
          return componentType.cast(new DummyInvalidationStateTransferManagerImpl());
       else
          return null;

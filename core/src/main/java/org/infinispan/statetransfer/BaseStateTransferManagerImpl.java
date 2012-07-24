@@ -307,7 +307,7 @@ public abstract class BaseStateTransferManagerImpl implements StateTransferManag
 
       final StateTransferControlCommand cmd = cf.buildStateTransferCommand(type, getAddress(), viewId, state, lockInfo);
 
-      rpcManager.invokeRemotelyInFuture(targets, cmd, false, stateTransferFuture, getTimeout());
+      rpcManager.invokeRemotelyInFuture(targets, cmd, usePriorityQueue(), stateTransferFuture, getTimeout());
    }
 
    public boolean isLastViewId(int viewId) {
@@ -402,4 +402,8 @@ public abstract class BaseStateTransferManagerImpl implements StateTransferManag
    }
 
    protected abstract long getTimeout();
+
+   protected boolean usePriorityQueue() {
+      return false;
+   }
 }

@@ -6,13 +6,10 @@ import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.configuration.cache.VersioningScheme;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.infinispan.statetransfer.StateTransferFunctionalTest;
-import org.infinispan.test.TestingUtil;
 import org.infinispan.test.fwk.TransportFlags;
 import org.infinispan.transaction.TransactionProtocol;
 import org.infinispan.util.concurrent.IsolationLevel;
 import org.testng.annotations.Test;
-
-import java.lang.reflect.Method;
 
 import static org.testng.Assert.assertEquals;
 
@@ -46,11 +43,6 @@ public class TotalOrderStateTransferFunctionalTest extends StateTransferFunction
       final Cache<Object, Object> cache1 = cm1.getCache(cacheName);
       cache0.put("k", "v");
       assertEquals(cache0.get("k"), "v");
-      eventually(new Condition() {
-         @Override
-         public boolean isSatisfied() throws Exception {
-            return "v".equals(cache1.get("k"));
-         }
-      });
+      assertEventuallyEquals(cache1, "k", "v");
    }
 }

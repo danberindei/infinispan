@@ -50,12 +50,6 @@ public interface TotalOrderRemoteTransaction extends CacheTransaction {
    boolean waitPrepared(boolean commit, EntryVersionsMap newVersions) throws InterruptedException;
 
    /**
-    * Gets a set of the modified keys of this transaction
-    * @return a set of keys
-    */
-   Set<Object> getModifiedKeys();
-
-   /**
     * Gets the latch associated to this remote transaction
     * @return the latch associated to this transaction
     */

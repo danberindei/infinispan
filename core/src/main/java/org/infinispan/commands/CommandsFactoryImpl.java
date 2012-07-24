@@ -36,6 +36,7 @@ import org.infinispan.commands.read.SizeCommand;
 import org.infinispan.commands.read.ValuesCommand;
 import org.infinispan.commands.remote.ClusteredGetCommand;
 import org.infinispan.commands.remote.MultipleRpcCommand;
+import org.infinispan.commands.remote.PrepareResponseCommand;
 import org.infinispan.commands.remote.SingleRpcCommand;
 import org.infinispan.commands.remote.recovery.CompleteTransactionCommand;
 import org.infinispan.commands.remote.recovery.GetInDoubtTransactionsCommand;
@@ -78,6 +79,7 @@ import org.infinispan.statetransfer.LockInfo;
 import org.infinispan.statetransfer.StateTransferManager;
 import org.infinispan.transaction.RemoteTransaction;
 import org.infinispan.transaction.TransactionTable;
+import org.infinispan.transaction.totalorder.TotalOrderManager;
 import org.infinispan.transaction.xa.DldGlobalTransaction;
 import org.infinispan.transaction.xa.GlobalTransaction;
 import org.infinispan.transaction.xa.recovery.RecoveryManager;
@@ -123,6 +125,7 @@ public class CommandsFactoryImpl implements CommandsFactory {
    private StateTransferManager stateTransferManager;
    private LockManager lockManager;
    private InternalEntryFactory entryFactory;
+   private TotalOrderManager totalOrderManager;
 
    private Map<Byte, ModuleCommandInitializer> moduleCommandInitializers;
 
@@ -132,7 +135,7 @@ public class CommandsFactoryImpl implements CommandsFactory {
                                  InvocationContextContainer icc, TransactionTable txTable, Configuration configuration,
                                  @ComponentName(KnownComponentNames.MODULE_COMMAND_INITIALIZERS) Map<Byte, ModuleCommandInitializer> moduleCommandInitializers,
                                  RecoveryManager recoveryManager, StateTransferManager stateTransferManager, LockManager lockManager,
-                                 InternalEntryFactory entryFactory) {
+                                 InternalEntryFactory entryFactory, TotalOrderManager totalOrderManager) {
       this.dataContainer = container;
       this.notifier = notifier;
       this.cache = cache;
@@ -146,6 +149,7 @@ public class CommandsFactoryImpl implements CommandsFactory {
       this.stateTransferManager = stateTransferManager;
       this.lockManager = lockManager;
       this.entryFactory = entryFactory;
+      this.totalOrderManager = totalOrderManager;
    }
 
    @Start(priority = 1)
@@ -411,6 +415,10 @@ public class CommandsFactoryImpl implements CommandsFactory {
             break;
          case ApplyDeltaCommand.COMMAND_ID:
             break;
+         case PrepareResponseCommand.COMMAND_ID:
+            PrepareResponseCommand prc = (PrepareResponseCommand) c;
+            prc.initialize(totalOrderManager);
+            break;
          default:
             ModuleCommandInitializer mci = moduleCommandInitializers.get(c.getCommandId());
             if (mci != null) {
@@ -491,5 +499,10 @@ public class CommandsFactoryImpl implements CommandsFactory {
    @Override
    public ApplyDeltaCommand buildApplyDeltaCommand(Object deltaAwareValueKey, Delta delta, Collection keys) {
       return new ApplyDeltaCommand(deltaAwareValueKey, delta, keys);
+   }
+
+   @Override
+   public PrepareResponseCommand buildPrepareResponseCommand(GlobalTransaction globalTransaction) {
+      return new PrepareResponseCommand(cacheName, globalTransaction);
    }
 }

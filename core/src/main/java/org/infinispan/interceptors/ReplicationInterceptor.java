@@ -132,8 +132,13 @@ public class ReplicationInterceptor extends BaseRpcInterceptor {
    }
 
    protected void broadcastPrepare(TxInvocationContext context, PrepareCommand command) {
-      boolean syncPrepare =  configuration.getCacheMode().isSynchronous() && !configuration.isTotalOrder();
-      rpcManager.broadcastRpcCommand(command, syncPrepare, false, configuration.isTotalOrder());
+      boolean totalOrder = configuration.isTotalOrder();
+      //In total order based protocol, we use synchronous prepare only when the commit phase is synchronous.
+      //It is needed for this case to ensure the semantic of sync commit phase and to ensure that all nodes
+      //   has seen the transaction (remember: the commit can be deliver before without this)
+      boolean syncPrepare = (!totalOrder && configuration.getCacheMode().isSynchronous()) ||
+            (totalOrder && configuration.isSyncCommitPhase());
+      rpcManager.broadcastRpcCommand(command, syncPrepare, false, totalOrder);
    }
 
    @Override

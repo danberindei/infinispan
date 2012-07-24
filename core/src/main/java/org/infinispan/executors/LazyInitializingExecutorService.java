@@ -37,6 +37,7 @@ import java.util.concurrent.TimeoutException;
  * are expensive.
  *
  * @author Manik Surtani
+ * @author Pedro Ruivo
  * @since 5.1
  */
 public final class LazyInitializingExecutorService implements ExecutorService, ControllableExecutorService {

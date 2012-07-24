@@ -98,7 +98,7 @@ public class StateTransferFunctionalTest extends MultipleCacheManagersTest {
    public static class DelayTransfer implements Serializable {
 
       private static final long serialVersionUID = 6361429803359702822L;
-      
+
       private transient int count;
 
       private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
@@ -192,9 +192,9 @@ public class StateTransferFunctionalTest extends MultipleCacheManagersTest {
       writeInitialData(cache1);
 
       JoiningNode node = new JoiningNode();
-      
+
       log.trace("Here is where state transfer should start.");
-      
+
       cache2 = node.getCache(cacheName);
       node.waitForJoin(60000, cache1, cache2);
       node.verifyStateTransfer(cache2);
@@ -344,18 +344,17 @@ public class StateTransferFunctionalTest extends MultipleCacheManagersTest {
       int count = writerThread.result();
 
       for (int c = 0; c < count; c++) {
-         Object o = cache2.get("test" + c);
-         assert new Integer(c).equals(o) : "Entry under key [test" + c + "] was [" + cache2.get("test" + c) + "] but expected [" + c + "]";
+         assertEventuallyEquals(cache2, "test" + c, c);
       }
    }
 
    protected void verifyInitialData(Cache<Object, Object> c) {
       Address address = c.getAdvancedCache().getRpcManager().getAddress();
       log.debugf("Checking values on cache " + address);
-      assert JOE.equals(c.get(A_B_NAME)) : "Incorrect value for key " + A_B_NAME;
-      assert TWENTY.equals(c.get(A_B_AGE)) : "Incorrect value for key " + A_B_AGE;
-      assert BOB.equals(c.get(A_C_NAME)) : "Incorrect value for key " + A_C_NAME;
-      assert FORTY.equals(c.get(A_C_AGE)) : "Incorrect value for key " + A_C_AGE;
+      assertEventuallyEquals(c, A_B_NAME, JOE);
+      assertEventuallyEquals(c, A_B_AGE, TWENTY);
+      assertEventuallyEquals(c, A_C_NAME, BOB);
+      assertEventuallyEquals(c, A_C_AGE, FORTY);
    }
 
    protected void writeInitialData(final Cache<Object, Object> c) {
@@ -393,8 +392,9 @@ public class StateTransferFunctionalTest extends MultipleCacheManagersTest {
 
       int count = writerThread.result();
 
-      for (int c = 0; c < count; c++)
-         assert new Integer(c).equals(cache2.get("test" + c)) : "Entry under key [test" + c + "] was [" + cache2.get("test" + c) + "] but expected [" + c + "]";
+      for (int c = 0; c < count; c++) {
+         assertEventuallyEquals(cache2, "test" + c, c);
+      }
    }
 
    @Listener

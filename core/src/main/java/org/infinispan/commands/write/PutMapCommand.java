@@ -37,6 +37,7 @@ import java.util.Set;
 
 /**
  * @author Mircea.Markus@jboss.com
+ * @author Pedro Ruivo
  * @since 4.0
  */
 public class PutMapCommand extends AbstractFlagAffectedCommand implements WriteCommand {
@@ -76,6 +77,9 @@ public class PutMapCommand extends AbstractFlagAffectedCommand implements WriteC
       for (Entry<Object, Object> e : map.entrySet()) {
          Object key = e.getKey();
          MVCCEntry me = lookupMvccEntry(ctx, key);
+         if (me == null) {
+            continue;
+         }
          notifier.notifyCacheEntryModified(key, me.getValue(), true, ctx);
          me.setValue(e.getValue());
          me.setLifespan(lifespanMillis);

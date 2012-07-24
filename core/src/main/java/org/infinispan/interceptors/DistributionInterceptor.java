@@ -85,7 +85,7 @@ public class DistributionInterceptor extends BaseRpcInterceptor {
    DistributionManager dm;
    StateTransferLock stateTransferLock;
    CommandsFactory cf;
-   DataContainer dataContainer;
+   protected DataContainer dataContainer;
    boolean isL1CacheEnabled, needReliableReturnValues;
    EntryFactory entryFactory;
    L1Manager l1Manager;
@@ -253,7 +253,10 @@ public class DistributionInterceptor extends BaseRpcInterceptor {
    }
 
    private void lockAndWrap(InvocationContext ctx, Object key, InternalCacheEntry ice) throws InterruptedException {
-      lockManager.acquireLock(ctx, key);
+      if (!configuration.isTotalOrder()) {
+         //we don't have locks in total order
+         lockManager.acquireLock(ctx, key);
+      }
       entryFactory.wrapEntryForPut(ctx, key, ice, false);
    }
 
