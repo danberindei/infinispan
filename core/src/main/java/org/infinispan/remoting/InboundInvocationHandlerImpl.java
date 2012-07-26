@@ -22,9 +22,7 @@
  */
 package org.infinispan.remoting;
 
-import org.infinispan.cacheviews.CacheViewsManager;
 import org.infinispan.commands.CommandsFactory;
-import org.infinispan.commands.control.CacheViewControlCommand;
 import org.infinispan.commands.control.StateTransferControlCommand;
 import org.infinispan.commands.remote.CacheRpcCommand;
 import org.infinispan.configuration.global.GlobalConfiguration;
@@ -41,6 +39,7 @@ import org.infinispan.remoting.responses.SuccessfulResponse;
 import org.infinispan.remoting.transport.Address;
 import org.infinispan.remoting.transport.Transport;
 import org.infinispan.statetransfer.StateTransferManager;
+import org.infinispan.topology.LocalTopologyManager;
 import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
 
@@ -57,7 +56,6 @@ public class InboundInvocationHandlerImpl implements InboundInvocationHandler {
    private static final boolean trace = log.isTraceEnabled();
    private GlobalConfiguration globalConfiguration;
    private Transport transport;
-   private CacheViewsManager cacheViewsManager;
 
    /**
     * How to handle an invocation based on the join status of a given cache *
@@ -68,11 +66,10 @@ public class InboundInvocationHandlerImpl implements InboundInvocationHandler {
 
    @Inject
    public void inject(GlobalComponentRegistry gcr, Transport transport,
-                      GlobalConfiguration globalConfiguration, CacheViewsManager cacheViewsManager) {
+                      GlobalConfiguration globalConfiguration) {
       this.gcr = gcr;
       this.transport = transport;
       this.globalConfiguration = globalConfiguration;
-      this.cacheViewsManager = cacheViewsManager;
    }
 
    private boolean hasJoinStarted(final ComponentRegistry componentRegistry) throws InterruptedException {
@@ -83,16 +80,6 @@ public class InboundInvocationHandlerImpl implements InboundInvocationHandler {
    @Override
    public Response handle(final CacheRpcCommand cmd, Address origin) throws Throwable {
       cmd.setOrigin(origin);
-
-      // TODO Support global commands separately
-      if (cmd instanceof CacheViewControlCommand) {
-         ((CacheViewControlCommand) cmd).init(cacheViewsManager);
-         try {
-            return SuccessfulResponse.create(cmd.perform(null));
-         } catch (Exception e) {
-            return new ExceptionResponse(e);
-         }
-      }
 
       String cacheName = cmd.getCacheName();
       ComponentRegistry cr = gcr.getNamedComponentRegistry(cacheName);

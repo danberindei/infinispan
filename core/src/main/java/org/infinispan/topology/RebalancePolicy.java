@@ -34,7 +34,7 @@ import org.infinispan.remoting.transport.Address;
  * @since 5.2
  */
 @Scope(Scopes.GLOBAL)
-interface RebalancePolicy {
+public interface RebalancePolicy {
    /**
     * Initialize the policy for a cache, without a list of members.
     * It won't have any effect if the cache is already initialized.

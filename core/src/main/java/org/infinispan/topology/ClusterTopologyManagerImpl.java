@@ -58,7 +58,7 @@ import static org.infinispan.factories.KnownComponentNames.ASYNC_TRANSPORT_EXECU
  * @author Dan Berindei
  * @since 5.2
  */
-class ClusterTopologyManagerImpl implements ClusterTopologyManager {
+public class ClusterTopologyManagerImpl implements ClusterTopologyManager {
    private static Log log = LogFactory.getLog(ClusterTopologyManagerImpl.class);
 
    private Transport transport;
@@ -111,14 +111,14 @@ class ClusterTopologyManagerImpl implements ClusterTopologyManager {
    }
 
    @Override
-   public CacheTopology handleJoin(String cacheName, Address joiner, CacheJoinInfo joinInfo) {
+   public CacheTopology handleJoin(String cacheName, Address joiner, CacheJoinInfo joinInfo) throws Exception {
       rebalancePolicy.initCache(cacheName, joinInfo);
       rebalancePolicy.updateMembersList(cacheName, Collections.singletonList(joiner), Collections.<Address>emptyList());
       return rebalancePolicy.getTopology(cacheName);
    }
 
    @Override
-   public void handleLeave(String cacheName, Address leaver) {
+   public void handleLeave(String cacheName, Address leaver) throws Exception {
       rebalancePolicy.updateMembersList(cacheName, Collections.<Address>emptyList(), Collections.singletonList(leaver));
    }
 
@@ -185,7 +185,11 @@ class ClusterTopologyManagerImpl implements ClusterTopologyManager {
             log.errorf(e, "Error recovering cluster state");
          }
       } else {
-         rebalancePolicy.updateMembersList(newMembers);
+         try {
+            rebalancePolicy.updateMembersList(newMembers);
+         } catch (Exception e) {
+            log.errorf(e, "Error updating the cluster member list");
+         }
       }
    }
 

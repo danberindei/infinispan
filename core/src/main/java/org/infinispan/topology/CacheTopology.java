@@ -17,7 +17,7 @@ import org.infinispan.remoting.transport.Address;
  * @author Dan Berindei
  * @since 5.2
  */
-class CacheTopology {
+public class CacheTopology {
    int topologyId;
    ConsistentHash currentCH;
    ConsistentHash pendingCH;

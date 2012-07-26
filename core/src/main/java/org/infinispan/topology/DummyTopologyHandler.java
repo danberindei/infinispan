@@ -19,43 +19,29 @@
 
 package org.infinispan.topology;
 
-import java.util.Map;
-
 import org.infinispan.distribution.newch.ConsistentHash;
-import org.infinispan.factories.scopes.Scope;
-import org.infinispan.factories.scopes.Scopes;
 
 /**
- * Runs on every node and handles the communication with the {@link ClusterTopologyManager}.
+ * Created with
  *
  * @author Dan Berindei
  * @since 5.2
  */
-@Scope(Scopes.GLOBAL)
-public interface LocalTopologyManager {
-   /**
-    * Forwards the join request to the coordinator.
-    * @return The current consistent hash.
-    */
-   Object join(String cacheName, CacheJoinInfo joinInfo, CacheTopologyHandler stm) throws Exception;
+public class DummyTopologyHandler implements CacheTopologyHandler {
 
-   /**
-    * Forwards the leave request to the coordinator.
-    */
-   void leave(String cacheName);
+   @Override
+   public CacheTopology getStatus() {
+      // TODO Remove this method, keep the current topology in LocalTopologyManager as well
+      return null;
+   }
 
-   /**
-    * Recovers the current topology information for all running caches and returns it to the coordinator.
-    */
-   Map<String, CacheTopology> handleStatusRequest();
+   @Override
+   public void updateConsistentHash(ConsistentHash currentCH, ConsistentHash pendingCH) {
+      // do nothing
+   }
 
-   /**
-    * Updates the current and/or pending consistent hash, without transferring any state.
-    */
-   void handleConsistentHashUpdate(String cacheName, ConsistentHash currentCH, ConsistentHash pendingCH);
-
-   /**
-    * Performs the state transfer.
-    */
-   void handleRebalance(String cacheName, int topologyId, ConsistentHash pendingCH);
+   @Override
+   public void rebalance(int topologyId, ConsistentHash pendingCH) {
+      // do nothing
+   }
 }

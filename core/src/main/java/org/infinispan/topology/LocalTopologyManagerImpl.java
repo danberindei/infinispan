@@ -45,7 +45,7 @@ import org.infinispan.util.logging.LogFactory;
  * @author Dan Berindei
  * @since 5.2
  */
-class LocalTopologyManagerImpl implements LocalTopologyManager {
+public class LocalTopologyManagerImpl implements LocalTopologyManager {
    private static Log log = LogFactory.getLog(LocalTopologyManagerImpl.class);
 
    private Transport transport;
