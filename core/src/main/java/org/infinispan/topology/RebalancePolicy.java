@@ -61,7 +61,7 @@ public interface RebalancePolicy {
    /**
     * Called when every member has completed receiving data.
     */
-   void onRebalanceCompleted(String cacheName, int topologyId);
+   void onRebalanceCompleted(String cacheName, int topologyId) throws Exception;
 
    /**
     * @return The current topology (current CH + pending CH) of a cache.

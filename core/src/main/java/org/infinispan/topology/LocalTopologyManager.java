@@ -57,5 +57,5 @@ public interface LocalTopologyManager {
    /**
     * Performs the state transfer.
     */
-   void handleRebalance(String cacheName, int topologyId, ConsistentHash pendingCH);
+   void handleRebalance(String cacheName, int topologyId, ConsistentHash pendingCH) throws InterruptedException;
 }

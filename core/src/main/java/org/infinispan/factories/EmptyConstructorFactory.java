@@ -34,8 +34,10 @@ import org.infinispan.remoting.InboundInvocationHandler;
 import org.infinispan.remoting.InboundInvocationHandlerImpl;
 import org.infinispan.topology.ClusterTopologyManager;
 import org.infinispan.topology.ClusterTopologyManagerImpl;
+import org.infinispan.topology.DefaultRebalancePolicy;
 import org.infinispan.topology.LocalTopologyManager;
 import org.infinispan.topology.LocalTopologyManagerImpl;
+import org.infinispan.topology.RebalancePolicy;
 import org.infinispan.transaction.xa.TransactionFactory;
 
 /**
@@ -46,7 +48,7 @@ import org.infinispan.transaction.xa.TransactionFactory;
  * @since 4.0
  */
 @DefaultFactoryFor(classes = {InboundInvocationHandler.class, RemoteCommandsFactory.class, ExternalizerTable.class,
-                              LocalTopologyManager.class, ClusterTopologyManager.class })
+                              LocalTopologyManager.class, ClusterTopologyManager.class, RebalancePolicy.class})
 @Scope(Scopes.GLOBAL)
 public class EmptyConstructorFactory extends AbstractComponentFactory implements AutoInstantiableFactory {
 
@@ -63,6 +65,8 @@ public class EmptyConstructorFactory extends AbstractComponentFactory implements
          return (T) new LocalTopologyManagerImpl();
       else if (componentType.equals(ClusterTopologyManager.class))
          return (T) new ClusterTopologyManagerImpl();
+      else if (componentType.equals(RebalancePolicy.class))
+         return (T) new DefaultRebalancePolicy();
 
       throw new ConfigurationException("Don't know how to create a " + componentType.getName());
    }

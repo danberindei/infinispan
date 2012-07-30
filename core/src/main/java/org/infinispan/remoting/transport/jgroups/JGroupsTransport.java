@@ -28,7 +28,9 @@ import org.infinispan.commands.ReplicableCommand;
 import org.infinispan.commands.remote.ClusteredGetCommand;
 import org.infinispan.config.parsing.XmlConfigHelper;
 import org.infinispan.configuration.global.TransportConfiguration;
+import org.infinispan.factories.GlobalComponentRegistry;
 import org.infinispan.factories.annotations.ComponentName;
+import org.infinispan.factories.annotations.Inject;
 import org.infinispan.jmx.JmxUtil;
 import org.infinispan.marshall.StreamingMarshaller;
 import org.infinispan.notifications.cachemanagerlistener.CacheManagerNotifier;
@@ -75,6 +77,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 
+import static org.infinispan.factories.KnownComponentNames.ASYNC_TRANSPORT_EXECUTOR;
 import static org.infinispan.factories.KnownComponentNames.GLOBAL_MARSHALLER;
 
 /**
@@ -113,6 +116,7 @@ public class JGroupsTransport extends AbstractTransport implements MembershipLis
    protected StreamingMarshaller marshaller;
    protected ExecutorService asyncExecutor;
    protected CacheManagerNotifier notifier;
+   private GlobalComponentRegistry gcr;
 
    private boolean globalStatsEnabled;
    private MBeanServer mbeanServer;
@@ -156,13 +160,25 @@ public class JGroupsTransport extends AbstractTransport implements MembershipLis
    // Lifecycle and setup stuff
    // ------------------------------------------------------------------------------------------------------------------
 
-   @Override
-   public void initialize(@ComponentName(GLOBAL_MARSHALLER) StreamingMarshaller marshaller, ExecutorService asyncExecutor, InboundInvocationHandler inboundInvocationHandler,
-            CacheManagerNotifier notifier) {
+   /**
+    * Initializes the transport with global cache configuration and transport-specific properties.
+    *
+    * @param marshaller    marshaller to use for marshalling and unmarshalling
+    * @param asyncExecutor executor to use for asynchronous calls
+    * @param inboundInvocationHandler       handler for invoking remotely originating calls on the local cache
+    * @param notifier      notifier to use
+    * @param gcr
+    */
+   @Inject
+   public void initialize(@ComponentName(GLOBAL_MARSHALLER) StreamingMarshaller marshaller,
+                          @ComponentName(ASYNC_TRANSPORT_EXECUTOR) ExecutorService asyncExecutor,
+                          InboundInvocationHandler inboundInvocationHandler, CacheManagerNotifier notifier,
+                          GlobalComponentRegistry gcr) {
       this.marshaller = marshaller;
       this.asyncExecutor = asyncExecutor;
       this.inboundInvocationHandler = inboundInvocationHandler;
       this.notifier = notifier;
+      this.gcr = gcr;
    }
 
    @Override
@@ -299,7 +315,7 @@ public class JGroupsTransport extends AbstractTransport implements MembershipLis
 
    private void initChannelAndRPCDispatcher() throws CacheException {
       initChannel();
-      dispatcher = new CommandAwareRpcDispatcher(channel, this, asyncExecutor, inboundInvocationHandler);
+      dispatcher = new CommandAwareRpcDispatcher(channel, this, asyncExecutor, inboundInvocationHandler, gcr);
       MarshallerAdapter adapter = new MarshallerAdapter(marshaller);
       dispatcher.setRequestMarshaller(adapter);
       dispatcher.setResponseMarshaller(adapter);
