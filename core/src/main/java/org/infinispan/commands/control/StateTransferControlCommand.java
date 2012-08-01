@@ -23,9 +23,7 @@
 package org.infinispan.commands.control;
 
 import org.infinispan.CacheException;
-import org.infinispan.commands.CommandsFactory;
 import org.infinispan.commands.remote.BaseRpcCommand;
-import org.infinispan.container.DataContainer;
 import org.infinispan.container.entries.InternalCacheEntry;
 import org.infinispan.context.InvocationContext;
 import org.infinispan.statetransfer.LockInfo;
@@ -58,7 +56,7 @@ public class StateTransferControlCommand extends BaseRpcCommand {
    }
 
    Type type;
-   Address sender;
+   Address sender; //todo [anistor] this field is not necessary. should use origin field from superclass
    int viewId;
    Collection<InternalCacheEntry> state;
    Collection<LockInfo> locks;
@@ -66,8 +64,7 @@ public class StateTransferControlCommand extends BaseRpcCommand {
 
    // cache components
    StateTransferManager stateTransferManager;
-   DataContainer dataContainer;
-   CommandsFactory commandsFactory;
+
    private static final Log log = LogFactory.getLog(StateTransferControlCommand.class);
 
    public StateTransferControlCommand() {
@@ -87,18 +84,8 @@ public class StateTransferControlCommand extends BaseRpcCommand {
       this.locks = lockInfo;
    }
 
-   public StateTransferControlCommand(String cacheName, Type type, Address sender, int viewId) {
-      super(cacheName);
-      this.type = type;
-      this.sender = sender;
-      this.viewId = viewId;
-   }
-
-   public void init(StateTransferManager stateTransferManager, DataContainer dataContainer,
-                    CommandsFactory commandsFactory) {
+   public void init(StateTransferManager stateTransferManager) {
       this.stateTransferManager = stateTransferManager;
-      this.dataContainer = dataContainer;
-      this.commandsFactory = commandsFactory;
    }
 
    @Override
