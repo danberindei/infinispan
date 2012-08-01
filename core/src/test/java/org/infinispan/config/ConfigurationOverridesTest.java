@@ -24,7 +24,7 @@ public class ConfigurationOverridesTest extends AbstractInfinispanTest {
       try {
          Configuration c = new Configuration().fluent()
                .clustering().hash()
-                  .consistentHashClass(TopologyAwareConsistentHash.class)
+//                  .consistentHashClass(TopologyAwareConsistentHash.class)
                .versioning().enable()
                .build();
          Configuration c2 = cm.defineConfiguration("a", c);
