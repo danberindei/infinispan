@@ -121,19 +121,24 @@ public class LocalTopologyManagerImpl implements LocalTopologyManager {
    public void handleConsistentHashUpdate(String cacheName, int topologyId, ConsistentHash currentCH, ConsistentHash pendingCH) {
       log.debugf("Updating local consistent hash(es) for cache %s: currentCH = %s, pendingCH = %s",
             cacheName, currentCH, pendingCH);
-      CacheTopologyHandler handler = runningCaches.get(cacheName).handler;
-      handler.updateConsistentHash(topologyId, currentCH, pendingCH);
+      LocalCacheStatus cacheStatus = runningCaches.get(cacheName);
+      cacheStatus.topology = new CacheTopology(topologyId, currentCH, pendingCH);
+      ConsistentHash unionCH = cacheStatus.joinInfo.getConsistentHashFactory().union(currentCH, pendingCH);
+      CacheTopologyHandler handler = cacheStatus.handler;
+      handler.updateConsistentHash(topologyId, currentCH, unionCH);
    }
 
    @Override
    public void handleRebalance(String cacheName, int topologyId, ConsistentHash currentCH, ConsistentHash pendingCH) throws InterruptedException {
       log.debugf("Starting local rebalance for cache %s, topology id = %d, new CH = %s", cacheName, topologyId, pendingCH);
-      LocalCacheStatus status = runningCaches.get(cacheName);
-      status.joinedLatch.await();
+      LocalCacheStatus cacheStatus = runningCaches.get(cacheName);
+      cacheStatus.joinedLatch.await();
 
-      CacheTopologyHandler handler = status.handler;
+      cacheStatus.topology = new CacheTopology(topologyId, currentCH, pendingCH);
+      ConsistentHash unionCH = cacheStatus.joinInfo.getConsistentHashFactory().union(currentCH, pendingCH);
+      CacheTopologyHandler handler = cacheStatus.handler;
       try {
-         handler.rebalance(topologyId, currentCH, pendingCH);
+         handler.rebalance(topologyId, currentCH, unionCH);
       } finally {
          // TODO If there was an exception, propagate the exception back to the coordinator
          // We don't want to block further rebalancing just because we got an exception on one node
