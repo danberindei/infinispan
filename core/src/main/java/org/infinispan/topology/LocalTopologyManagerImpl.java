@@ -66,7 +66,7 @@ public class LocalTopologyManagerImpl implements LocalTopologyManager {
    @Override
    public CacheTopology join(String cacheName, CacheJoinInfo joinInfo, CacheTopologyHandler stm) throws Exception {
       log.debugf("Node %s joining cache %s", transport.getAddress(), cacheName);
-      LocalCacheStatus status = new LocalCacheStatus(stm);
+      LocalCacheStatus status = new LocalCacheStatus(joinInfo, stm);
       runningCaches.put(cacheName, status);
 
       ReplicableCommand command = new CacheTopologyControlCommand(cacheName,
@@ -192,11 +192,13 @@ public class LocalTopologyManagerImpl implements LocalTopologyManager {
    }
 
    public static class LocalCacheStatus {
+      public final CacheJoinInfo joinInfo;
       public final CacheTopologyHandler handler;
       public final CountDownLatch joinedLatch = new CountDownLatch(1);
       public volatile CacheTopology topology;
 
-      public LocalCacheStatus(CacheTopologyHandler handler) {
+      public LocalCacheStatus(CacheJoinInfo joinInfo, CacheTopologyHandler handler) {
+         this.joinInfo = joinInfo;
          this.handler = handler;
       }
    }
