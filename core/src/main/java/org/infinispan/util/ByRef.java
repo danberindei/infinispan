@@ -26,7 +26,7 @@ package org.infinispan.util;
  * @author Dan Berindei
  * @since 5.1
  */
-public class ByRef<T> {
+public class ByRef<T> {  //todo [anistor] this class is no longer used
    private T ref;
 
    public ByRef(T t) {

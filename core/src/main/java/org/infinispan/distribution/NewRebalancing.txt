@@ -1,4 +1,4 @@
-
+//TODO [anistor] this seems way out of date, need to remove it
 
 New DIST rebalancing code in Infinispan
 =======================================

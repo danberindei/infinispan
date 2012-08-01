@@ -64,6 +64,7 @@ import java.util.concurrent.ExecutionException;
 
 import static org.jboss.logging.Logger.Level.*;
 
+//todo [anistor] plenty of unused log methods. have to remove them
 /**
  * Infinispan's log abstraction layer on top of JBoss Logging.
  * <p/>

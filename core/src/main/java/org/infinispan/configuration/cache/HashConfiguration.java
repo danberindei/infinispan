@@ -31,7 +31,7 @@ public class HashConfiguration {
    private final ConsistentHash consistentHash;
    private final Hash hash;
    private final int numOwners;
-   private final int numVirtualNodes;
+   private final int numVirtualNodes;  //todo [anistor] rename to numSegments
    private final GroupsConfiguration groupsConfiguration;
    private final StateTransferConfiguration stateTransferConfiguration;
 
