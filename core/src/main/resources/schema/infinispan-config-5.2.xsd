@@ -926,7 +926,7 @@
                 <xs:attribute name="hashFunctionClass" type="xs:string">
                   <xs:annotation>
                     <xs:documentation>
-                      The hash function in use. Used as a bit spreader and a general hash code generator. Typically one of the the many default org.infinispan.distribution.ch.ConsistentHash implementations shipped.
+                      The hash function in use. Used as a bit spreader and a general hash code generator. Typically one of the the many default org.infinispan.distribution.h.ConsistentHash implementations shipped.
                     </xs:documentation>
                   </xs:annotation>
                 </xs:attribute>

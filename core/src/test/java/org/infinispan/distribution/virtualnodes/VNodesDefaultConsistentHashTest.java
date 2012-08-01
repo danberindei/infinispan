@@ -24,8 +24,8 @@ package org.infinispan.distribution.virtualnodes;
 
 import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.distribution.TestAddress;
-import org.infinispan.distribution.ch.ConsistentHashHelper;
-import org.infinispan.distribution.ch.DefaultConsistentHash;
+import org.infinispan.distribution.oldch.ConsistentHashHelper;
+import org.infinispan.distribution.oldch.DefaultConsistentHash;
 import org.infinispan.remoting.transport.Address;
 import org.infinispan.test.AbstractInfinispanTest;
 import org.testng.annotations.Test;

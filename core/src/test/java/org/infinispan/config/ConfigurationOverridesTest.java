@@ -1,6 +1,6 @@
 package org.infinispan.config;
 
-import org.infinispan.distribution.ch.TopologyAwareConsistentHash;
+import org.infinispan.distribution.oldch.TopologyAwareConsistentHash;
 import org.infinispan.interceptors.IsMarshallableInterceptor;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.infinispan.test.AbstractInfinispanTest;

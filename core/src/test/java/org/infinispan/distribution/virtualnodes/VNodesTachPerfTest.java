@@ -24,9 +24,9 @@
 package org.infinispan.distribution.virtualnodes;
 
 import org.infinispan.configuration.cache.ConfigurationBuilder;
-import org.infinispan.distribution.ch.ConsistentHash;
-import org.infinispan.distribution.ch.ConsistentHashHelper;
-import org.infinispan.distribution.ch.TopologyAwareConsistentHash;
+import org.infinispan.distribution.oldch.ConsistentHash;
+import org.infinispan.distribution.oldch.ConsistentHashHelper;
+import org.infinispan.distribution.oldch.TopologyAwareConsistentHash;
 import org.infinispan.remoting.transport.Address;
 import org.infinispan.remoting.transport.jgroups.JGroupsTopologyAwareAddress;
 import org.infinispan.test.AbstractInfinispanTest;
