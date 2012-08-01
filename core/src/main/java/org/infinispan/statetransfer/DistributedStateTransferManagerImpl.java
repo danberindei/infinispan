@@ -26,7 +26,6 @@ import org.infinispan.distribution.DistributionManager;
 import org.infinispan.distribution.ch.ConsistentHash;
 import org.infinispan.distribution.ch.ConsistentHashFactory;
 import org.infinispan.distribution.ch.DefaultConsistentHashFactory;
-import org.infinispan.distribution.oldch.ConsistentHashHelper;
 import org.infinispan.factories.annotations.Inject;
 import org.infinispan.jmx.annotations.MBean;
 import org.infinispan.loaders.CacheStore;
