@@ -23,7 +23,7 @@
 
 package org.infinispan.newstatetransfer;
 
-import org.infinispan.distribution.newch.AdvancedConsistentHash;
+import org.infinispan.distribution.ch.AdvancedConsistentHash;
 import org.infinispan.remoting.transport.Address;
 
 import java.util.List;

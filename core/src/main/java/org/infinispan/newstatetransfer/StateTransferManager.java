@@ -23,7 +23,7 @@
 
 package org.infinispan.newstatetransfer;
 
-import org.infinispan.distribution.newch.AdvancedConsistentHash;
+import org.infinispan.distribution.ch.AdvancedConsistentHash;
 import org.infinispan.factories.scopes.Scope;
 import org.infinispan.factories.scopes.Scopes;
 import org.infinispan.jmx.annotations.ManagedAttribute;

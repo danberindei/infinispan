@@ -27,7 +27,7 @@ import org.infinispan.commands.CommandsFactory;
 import org.infinispan.commands.write.WriteCommand;
 import org.infinispan.configuration.cache.Configuration;
 import org.infinispan.container.DataContainer;
-import org.infinispan.distribution.newch.AdvancedConsistentHash;
+import org.infinispan.distribution.ch.AdvancedConsistentHash;
 import org.infinispan.loaders.CacheLoaderManager;
 import org.infinispan.remoting.rpc.RpcManager;
 import org.infinispan.remoting.transport.Address;

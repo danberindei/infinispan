@@ -26,7 +26,7 @@ package org.infinispan.newstatetransfer;
 import org.infinispan.commands.CommandsFactory;
 import org.infinispan.container.DataContainer;
 import org.infinispan.container.entries.InternalCacheEntry;
-import org.infinispan.distribution.newch.AdvancedConsistentHash;
+import org.infinispan.distribution.ch.AdvancedConsistentHash;
 import org.infinispan.loaders.CacheLoaderException;
 import org.infinispan.loaders.CacheLoaderManager;
 import org.infinispan.loaders.CacheStore;
