@@ -57,13 +57,6 @@ public class InboundInvocationHandlerImpl implements InboundInvocationHandler {
    private GlobalConfiguration globalConfiguration;
    private Transport transport;
 
-   /**
-    * How to handle an invocation based on the join status of a given cache *
-    */
-   private enum JoinHandle {
-      OK, IGNORE
-   }
-
    @Inject
    public void inject(GlobalComponentRegistry gcr, Transport transport,
                       GlobalConfiguration globalConfiguration) {
