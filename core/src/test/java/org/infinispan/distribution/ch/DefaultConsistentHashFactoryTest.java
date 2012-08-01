@@ -1,6 +1,6 @@
 /*
  * JBoss, Home of Professional Open Source
- * Copyright 2009 Red Hat Inc. and/or its affiliates and other
+ * Copyright 2012 Red Hat Inc. and/or its affiliates and other
  * contributors as indicated by the @author tags. All rights reserved.
  * See the copyright.txt in the distribution for a full listing of
  * individual contributors.
@@ -34,7 +34,7 @@ import org.testng.annotations.Test;
 
 import static org.testng.Assert.*;
 
-@Test(groups = "unit", testName = "distribution.NewDefaultConsistentHashTest")
+@Test(groups = "unit", testName = "distribution.DefaultConsistentHashFactoryTest")
 public class DefaultConsistentHashFactoryTest extends AbstractInfinispanTest {
 
    private static int iterationCount = 0;
