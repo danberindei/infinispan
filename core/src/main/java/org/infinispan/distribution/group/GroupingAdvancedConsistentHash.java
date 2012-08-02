@@ -19,6 +19,7 @@
 
 package org.infinispan.distribution.group;
 
+import org.infinispan.commons.hash.Hash;
 import org.infinispan.distribution.ch.ConsistentHash;
 import org.infinispan.remoting.transport.Address;
 
@@ -50,6 +51,21 @@ public class GroupingAdvancedConsistentHash implements ConsistentHash {
    }
 
    @Override
+   public int getNumOwners() {
+      return ch.getNumOwners();
+   }
+
+   @Override
+   public Hash getHashFunction() {
+      return null;
+   }
+
+   @Override
+   public List<Address> getMembers() {
+      return ch.getMembers();
+   }
+
+   @Override
    public int getSegment(Object key) {
       String groupKey = groupManager.getGroup(key);
       return ch.getSegment(groupKey);
@@ -68,16 +84,6 @@ public class GroupingAdvancedConsistentHash implements ConsistentHash {
    @Override
    public Set<Integer> getSegmentsForOwner(Address owner) {
       return ch.getSegmentsForOwner(owner);
-   }
-
-   @Override
-   public int getNumOwners() {
-      return ch.getNumOwners();
-   }
-
-   @Override
-   public List<Address> getMembers() {
-      return ch.getMembers();
    }
 
    @Override

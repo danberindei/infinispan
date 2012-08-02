@@ -23,6 +23,7 @@
 
 package org.infinispan.distribution.ch;
 
+import org.infinispan.commons.hash.Hash;
 import org.infinispan.remoting.transport.Address;
 
 import java.util.Collection;
@@ -64,6 +65,15 @@ public interface ConsistentHash {
     *         a different number of owners.
     */
    int getNumOwners();
+
+
+   Hash getHashFunction();
+
+   /**
+    * @return The actual number of hash space segments. Note that it may not be the same as the number
+    *         of segments passed in at creation time.
+    */
+   int getNumSegments();
 
    /**
     * Should return the addresses of the nodes used to create this consistent hash.
@@ -107,12 +117,6 @@ public interface ConsistentHash {
     * @return {@code true} if the key is mapped to the address; {@code false} otherwise
     */
    boolean isKeyLocalToNode(Address nodeAddress, Object key);
-
-   /**
-    * @return The actual number of hash space segments. Note that it may not be the same as the number
-    *         of segments passed in at creation time.
-    */
-   int getNumSegments();
 
    /**
     * @return The hash space segment that a key maps to.

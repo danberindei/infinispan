@@ -46,6 +46,7 @@ public class DefaultConsistentHash implements ConsistentHash {
    private final int numOwners;
    private final List<Address> members;
    private final Address[][] segmentOwners;
+   private final int segmentSize;
 
    public DefaultConsistentHash(Hash hashFunction, int numSegments, int numOwners, List<Address> members,
                                 List<Address>[] segmentOwners) {
@@ -65,8 +66,11 @@ public class DefaultConsistentHash implements ConsistentHash {
          }
          this.segmentOwners[i] = segmentOwners[i].toArray(new Address[segmentOwners[i].size()]);
       }
+      // this
+      this.segmentSize = (int)Math.ceil((double)Integer.MAX_VALUE / numSegments);
    }
 
+   @Override
    public Hash getHashFunction() {
       return hashFunction;
    }
@@ -96,7 +100,20 @@ public class DefaultConsistentHash implements ConsistentHash {
 
    @Override
    public int getSegment(Object key) {
-      return Math.abs(hashFunction.hash(key) % numSegments);
+      // The result must always be positive, so we make sure the dividend is positive first
+      return getNormalizedHash(key) / segmentSize;
+   }
+
+   public int getNormalizedHash(Object key) {
+      return hashFunction.hash(key) & Integer.MAX_VALUE;
+   }
+
+   public List<Integer> getSegmentHashes() {
+      List<Integer> hashes = new ArrayList<Integer>(numSegments);
+      for (int i = 0; i < numSegments; i++) {
+         hashes.add(i * segmentSize);
+      }
+      return hashes;
    }
 
    @Override
