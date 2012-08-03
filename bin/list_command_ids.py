@@ -26,7 +26,7 @@ command_line_regexp = re.compile('COMMAND_ID\s*=\s*([0-9]+)\s*;')
 
 command_ids = {}
 warnings = []
-for test_file in GlobDirectoryWalker(get_search_path(sys.argv[0]) + 'core/src/main/java/org/infinispan/commands', '*Command.java'):
+for test_file in GlobDirectoryWalker(get_search_path(sys.argv[0]) + 'core/src/main/java/', '*Command.java'):
   tf = open(test_file)
   try:
     for line in tf:
