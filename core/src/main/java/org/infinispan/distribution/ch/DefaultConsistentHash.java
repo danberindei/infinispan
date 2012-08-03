@@ -227,7 +227,7 @@ public class DefaultConsistentHash implements ConsistentHash {
 
       @Override
       public Integer getId() {
-         return Ids.NEW_DEFAULT_CONSISTENT_HASH;
+         return Ids.DEFAULT_CONSISTENT_HASH;
       }
 
       @Override
