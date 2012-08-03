@@ -29,7 +29,6 @@ import org.infinispan.commons.hash.Hash;
 import org.infinispan.marshall.AbstractExternalizer;
 import org.infinispan.marshall.Ids;
 import org.infinispan.remoting.transport.Address;
-import org.infinispan.util.Util;
 
 /**
  * Default {@link ConsistentHash} implementation. This object is immutable.
@@ -66,7 +65,6 @@ public class DefaultConsistentHash implements ConsistentHash {
          }
          this.segmentOwners[i] = segmentOwners[i].toArray(new Address[segmentOwners[i].size()]);
       }
-      // this
       this.segmentSize = (int)Math.ceil((double)Integer.MAX_VALUE / numSegments);
    }
 
@@ -232,7 +230,7 @@ public class DefaultConsistentHash implements ConsistentHash {
 
       @Override
       public Set<Class<? extends DefaultConsistentHash>> getTypeClasses() {
-         return Util.<Class<? extends DefaultConsistentHash>>asSet(DefaultConsistentHash.class);
+         return Collections.<Class<? extends DefaultConsistentHash>>singleton(DefaultConsistentHash.class);
       }
    }
 }
