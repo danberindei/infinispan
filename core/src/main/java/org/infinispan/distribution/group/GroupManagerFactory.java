@@ -19,23 +19,12 @@
 
 package org.infinispan.distribution.group;
 
-import java.lang.reflect.Method;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.ConcurrentMap;
-
 import org.infinispan.configuration.cache.GroupsConfiguration;
 import org.infinispan.factories.AbstractNamedCacheComponentFactory;
 import org.infinispan.factories.AutoInstantiableFactory;
 import org.infinispan.factories.annotations.DefaultFactoryFor;
 import org.infinispan.factories.scopes.Scope;
 import org.infinispan.factories.scopes.Scopes;
-import org.infinispan.util.ReflectionUtil;
-import org.infinispan.util.Util;
-import org.infinispan.util.concurrent.ConcurrentMapFactory;
-
-import static org.infinispan.util.ReflectionUtil.invokeAccessibly;
 
 @Scope(Scopes.NAMED_CACHE)
 @DefaultFactoryFor(classes = GroupManagerFactory.class)
