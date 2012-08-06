@@ -36,11 +36,11 @@ import java.util.Set;
  * @author Dan Berindei
  * @since 5.2
  */
-public class GroupingAdvancedConsistentHash implements ConsistentHash {
+public class GroupingConsistentHash implements ConsistentHash {
    private ConsistentHash ch;
    private GroupManager groupManager;
 
-   public GroupingAdvancedConsistentHash(ConsistentHash ch, GroupManager groupManager) {
+   public GroupingConsistentHash(ConsistentHash ch, GroupManager groupManager) {
       this.ch = ch;
       this.groupManager = groupManager;
    }
