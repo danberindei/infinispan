@@ -65,7 +65,7 @@ import static org.infinispan.util.Util.getInstance;
 @DefaultFactoryFor(classes = {CacheNotifier.class, CommandsFactory.class,
                               CacheLoaderManager.class, InvocationContextContainer.class, PassivationManager.class,
                               BatchContainer.class, EvictionManager.class,
-                              TransactionCoordinator.class, RecoveryAdminOperations.class, StateTransferLock.class, org.infinispan.statetransfer.StateTransferLock.class,
+                              TransactionCoordinator.class, RecoveryAdminOperations.class, StateTransferLock.class,
                               ClusteringDependentLogic.class, LockContainer.class,
                               L1Manager.class, TransactionFactory.class})
 public class EmptyConstructorNamedCacheFactory extends AbstractNamedCacheComponentFactory implements AutoInstantiableFactory {
@@ -101,8 +101,6 @@ public class EmptyConstructorNamedCacheFactory extends AbstractNamedCacheCompone
             return (T) new TransactionCoordinator();
          } else if (componentType.equals(RecoveryAdminOperations.class)) {
             return (T) new RecoveryAdminOperations();
-         } else if (componentType.equals(org.infinispan.statetransfer.StateTransferLock.class)) {
-            return (T) new org.infinispan.statetransfer.StateTransferLockImpl();
          } else if (componentType.equals(StateTransferLock.class)) {
             return (T) new StateTransferLockImpl();
          } else if (componentType.equals(EvictionManager.class)) {
