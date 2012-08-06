@@ -41,10 +41,10 @@ import org.infinispan.factories.annotations.DefaultFactoryFor;
 import org.infinispan.interceptors.locking.ClusteringDependentLogic;
 import org.infinispan.loaders.CacheLoaderManager;
 import org.infinispan.loaders.CacheLoaderManagerImpl;
-import org.infinispan.newstatetransfer.StateTransferLock;
-import org.infinispan.newstatetransfer.StateTransferLockImpl;
 import org.infinispan.notifications.cachelistener.CacheNotifier;
 import org.infinispan.notifications.cachelistener.CacheNotifierImpl;
+import org.infinispan.newstatetransfer.StateTransferLock;
+import org.infinispan.newstatetransfer.StateTransferLockImpl;
 import org.infinispan.transaction.TransactionCoordinator;
 import org.infinispan.transaction.xa.TransactionFactory;
 import org.infinispan.transaction.xa.recovery.RecoveryAdminOperations;
@@ -65,7 +65,7 @@ import static org.infinispan.util.Util.getInstance;
 @DefaultFactoryFor(classes = {CacheNotifier.class, CommandsFactory.class,
                               CacheLoaderManager.class, InvocationContextContainer.class, PassivationManager.class,
                               BatchContainer.class, EvictionManager.class,
-                              TransactionCoordinator.class, RecoveryAdminOperations.class, StateTransferLock.class,
+                              TransactionCoordinator.class, RecoveryAdminOperations.class, StateTransferLock.class, org.infinispan.statetransfer.StateTransferLock.class,
                               ClusteringDependentLogic.class, LockContainer.class,
                               L1Manager.class, TransactionFactory.class})
 public class EmptyConstructorNamedCacheFactory extends AbstractNamedCacheComponentFactory implements AutoInstantiableFactory {
@@ -101,6 +101,8 @@ public class EmptyConstructorNamedCacheFactory extends AbstractNamedCacheCompone
             return (T) new TransactionCoordinator();
          } else if (componentType.equals(RecoveryAdminOperations.class)) {
             return (T) new RecoveryAdminOperations();
+         } else if (componentType.equals(org.infinispan.statetransfer.StateTransferLock.class)) {
+            return (T) new org.infinispan.statetransfer.StateTransferLockImpl();
          } else if (componentType.equals(StateTransferLock.class)) {
             return (T) new StateTransferLockImpl();
          } else if (componentType.equals(EvictionManager.class)) {
