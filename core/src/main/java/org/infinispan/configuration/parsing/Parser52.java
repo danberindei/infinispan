@@ -31,6 +31,7 @@ import java.util.Properties;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 
+import org.infinispan.commons.hash.Hash;
 import org.infinispan.config.ConfigurationException;
 import org.infinispan.configuration.cache.AbstractLoaderConfigurationBuilder;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
@@ -44,7 +45,7 @@ import org.infinispan.configuration.global.GlobalConfigurationBuilder;
 import org.infinispan.configuration.global.ShutdownHookBehavior;
 import org.infinispan.configuration.global.TransportConfigurationBuilder;
 import org.infinispan.container.DataContainer;
-import org.infinispan.distribution.ch.ConsistentHash;
+import org.infinispan.distribution.ch.ConsistentHashFactory;
 import org.infinispan.distribution.group.Grouper;
 import org.infinispan.eviction.EvictionStrategy;
 import org.infinispan.eviction.EvictionThreadPolicy;
@@ -149,7 +150,6 @@ public class Parser52 implements ConfigurationParser<ConfigurationBuilderHolder>
    }
 
    private void parseCache(final XMLExtendedStreamReader reader, final ConfigurationBuilderHolder holder) throws XMLStreamException {
-      ConfigurationBuilder builder = holder.getCurrentConfigurationBuilder();
       while (reader.hasNext() && (reader.nextTag() != XMLStreamConstants.END_ELEMENT)) {
          Element element = Element.forName(reader.getLocalName());
          switch (element) {
@@ -785,7 +785,6 @@ public class Parser52 implements ConfigurationParser<ConfigurationBuilderHolder>
 
    private void parseCustomInterceptors(final XMLExtendedStreamReader reader, final ConfigurationBuilderHolder holder) throws XMLStreamException {
       ParseUtils.requireNoAttributes(reader);
-      ConfigurationBuilder builder = holder.getCurrentConfigurationBuilder();
       while (reader.hasNext() && (reader.nextTag() != XMLStreamConstants.END_ELEMENT)) {
          Element element = Element.forName(reader.getLocalName());
          switch (element) {
@@ -1016,15 +1015,16 @@ public class Parser52 implements ConfigurationParser<ConfigurationBuilderHolder>
          String value = replaceProperties(reader.getAttributeValue(i));
          Attribute attribute = Attribute.forName(reader.getAttributeLocalName(i));
          switch (attribute) {
-            case CLASS:
-            case HASH_FUNCTION_CLASS:
-               builder.clustering().hash().consistentHash(Util.<ConsistentHash> getInstance(value, holder.getClassLoader()));
+            case FACTORY_CLASS:
+               builder.clustering().hash().consistentHashFactory(Util.<ConsistentHashFactory>getInstance(value, holder.getClassLoader()));
+            case HASH_SEED_CLASS:
+               builder.clustering().hash().hash(Util.<Hash>getInstance(value, holder.getClassLoader()));
                break;
             case NUM_OWNERS:
                builder.clustering().hash().numOwners(Integer.parseInt(value));
                break;
-            case NUM_VIRTUAL_NODES:
-               builder.clustering().hash().numVirtualNodes(Integer.parseInt(value));
+            case NUM_SEGMENTS:
+               builder.clustering().hash().numSegments(Integer.parseInt(value));
                break;
             default:
                throw ParseUtils.unexpectedAttribute(reader, i);

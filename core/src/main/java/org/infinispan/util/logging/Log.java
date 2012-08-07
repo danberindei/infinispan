@@ -855,4 +855,11 @@ public interface Log extends BasicLogger {
    @Message(value = "While stopping a cache or cache manager, one of its components failed to stop", id = 189)
    void componentFailedToStop(@Cause Throwable e);
 
+   @LogMessage(level = WARN)
+   @Message(value = "hash's 'numVirtualNodes' attribute has been deprecated. Please use hash.numSegments instead", id = 190)
+   void hashNumVirtualNodesDeprecated();
+
+   @LogMessage(level = WARN)
+   @Message(value = "hash's 'consistentHash' attribute has been deprecated. Please use hash.consistentHashFactory instead", id = 191)
+   void consistentHashDeprecated();
 }
