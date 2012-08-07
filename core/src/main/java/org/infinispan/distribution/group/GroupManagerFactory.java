@@ -27,7 +27,7 @@ import org.infinispan.factories.scopes.Scope;
 import org.infinispan.factories.scopes.Scopes;
 
 @Scope(Scopes.NAMED_CACHE)
-@DefaultFactoryFor(classes = GroupManagerFactory.class)
+@DefaultFactoryFor(classes = GroupManager.class)
 public class GroupManagerFactory extends AbstractNamedCacheComponentFactory implements AutoInstantiableFactory {
 
    @Override
