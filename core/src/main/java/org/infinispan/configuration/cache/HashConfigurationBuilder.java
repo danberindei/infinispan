@@ -22,6 +22,8 @@ import org.infinispan.commons.hash.Hash;
 import org.infinispan.commons.hash.MurmurHash3;
 import org.infinispan.distribution.ch.ConsistentHash;
 import org.infinispan.distribution.ch.ConsistentHashFactory;
+import org.infinispan.distribution.ch.DefaultConsistentHashFactory;
+import org.infinispan.distribution.ch.ReplicatedConsistentHashFactory;
 import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
 
@@ -177,7 +179,17 @@ public class HashConfigurationBuilder extends AbstractClusteringConfigurationChi
    @Override
    public HashConfiguration create() {
       // TODO stateTransfer().create() will create a duplicate StateTransferConfiguration instance. That's ok as long as none of the stateTransfer settings are modifiable at runtime.
-      return new HashConfiguration(consistentHashFactory, hash, numOwners, numSegments,
+      ConsistentHashFactory finalCHFactory = null;
+      if (consistentHashFactory != null) {
+         finalCHFactory = consistentHashFactory;
+      } else if (clustering().cacheMode().isClustered()) {
+         if (clustering().cacheMode().isDistributed()) {
+            finalCHFactory = new DefaultConsistentHashFactory();
+         } else {
+            finalCHFactory = new ReplicatedConsistentHashFactory();
+         }
+      }
+      return new HashConfiguration(finalCHFactory, hash, numOwners, numSegments,
             groupsConfigurationBuilder.create(), stateTransfer().create());
    }
 
