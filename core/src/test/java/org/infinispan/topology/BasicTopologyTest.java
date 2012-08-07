@@ -32,6 +32,7 @@ import org.infinispan.configuration.cache.CacheMode;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.infinispan.test.MultipleCacheManagersTest;
+import org.infinispan.test.TestingUtil;
 import org.infinispan.test.fwk.TestCacheManagerFactory;
 import org.testng.annotations.Test;
 
@@ -57,49 +58,17 @@ public class BasicTopologyTest extends MultipleCacheManagersTest {
 
       EmbeddedCacheManager manager2 = addClusterEnabledCacheManager(config);
       Cache<Object,Object> cache2 = manager2.getCache("topologyTest");
+      waitForClusterToForm("topologyTest");
       log.info("Cluster formed with 2 caches");
 
       EmbeddedCacheManager manager3 = addClusterEnabledCacheManager(config);
       Cache<Object,Object> cache3 = manager3.getCache("topologyTest");
+      TestingUtil.waitForRehashToComplete(cache1, cache2, cache3);
       log.info("Cluster formed with 3 caches");
-   }
 
-   public void testInvertHash() {
-      Hash hashFunction = new MurmurHash3();
-      int numSegments = 151;
-      int numOwners = 2;
-      double leewayFraction = 0.0001;
-
-      long startNanos = System.nanoTime();
-
-      int segmentSize = (int)Math.ceil((double)Integer.MAX_VALUE / numSegments);
-      int leeway = (int) (leewayFraction * segmentSize);
-      System.out.printf("leeway=%f%%\n", ((double)leeway*numSegments/Integer.MAX_VALUE*100));
-      List[] denormalizedSegmentOwners = new List[numSegments];
-      for (int i = 0; i < numSegments; i++) {
-         denormalizedSegmentOwners[i] = new ArrayList<Integer>(numOwners);
-      }
-      int segmentsLeft = numSegments;
-
-      // Allows overflow, if we didn't find all segments in the 0..MAX_VALUE range
-      for (int i = 0; segmentsLeft != 0; i++) {
-         int normalizedHash = hashFunction.hash(i) & Integer.MAX_VALUE;
-         if (normalizedHash % segmentSize < leeway) {
-            int segmentIdx = normalizedHash / segmentSize;
-            if (denormalizedSegmentOwners[segmentIdx].size() < numOwners) {
-               denormalizedSegmentOwners[segmentIdx].add(i);
-               if (denormalizedSegmentOwners[segmentIdx].size() == numOwners) {
-                  segmentsLeft--;
-                  System.out.print('+');
-               }
-            }
-         }
-      }
-      System.out.println();
-
-      long endNanos = System.nanoTime();
-      System.out.println(TimeUnit.NANOSECONDS.toMillis(endNanos - startNanos));
-
-      System.out.println(Arrays.toString(denormalizedSegmentOwners));
+      killMember(2);
+      log.info("Member 3 left the cluster");
+      TestingUtil.waitForRehashToComplete(cache1, cache2);
+      log.info("Rebalanced with members 1 and 2");
    }
 }
