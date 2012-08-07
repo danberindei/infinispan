@@ -63,7 +63,6 @@ import java.util.concurrent.ExecutionException;
 
 import static org.jboss.logging.Logger.Level.*;
 
-//todo [anistor] plenty of unused log methods. have to remove them
 /**
  * Infinispan's log abstraction layer on top of JBoss Logging.
  * <p/>
@@ -686,7 +685,7 @@ public interface Log extends BasicLogger {
 
    @LogMessage(level = WARN)
    @Message(value = "Failed loading value for key %s from cache store", id = 144)
-   void failedLoadingValueFromCacheStore(Object key);
+   void failedLoadingValueFromCacheStore(Object key, @Cause Exception e);
 
    @LogMessage(level = ERROR)
    @Message(value = "Error during rehash", id = 145)
@@ -862,4 +861,8 @@ public interface Log extends BasicLogger {
    @LogMessage(level = WARN)
    @Message(value = "hash's 'consistentHash' attribute has been deprecated. Please use hash.consistentHashFactory instead", id = 191)
    void consistentHashDeprecated();
+
+   @LogMessage(level = WARN)
+   @Message(value = "Failed loading keys from cache store", id = 192)
+   void failedLoadingKeysFromCacheStore(@Cause Exception e);
 }
