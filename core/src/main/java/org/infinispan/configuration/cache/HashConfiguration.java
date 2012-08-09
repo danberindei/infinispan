@@ -57,6 +57,9 @@ public class HashConfiguration {
     */
    @Deprecated
    public ConsistentHash consistentHash() {
+      if (consistentHashFactory == null)
+         return null;
+
       List<Address> members = Collections.<Address>singletonList(new JGroupsAddress(new UUID()));
       return consistentHashFactory.create(hash, numOwners, numSegments, members);
    }
