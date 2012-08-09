@@ -199,7 +199,7 @@ public class DefaultConsistentHash implements ConsistentHash {
       sb.append(", numSegments=").append(numSegments);
       sb.append(", segmentOwners:\n");
       for (int i = 0; i < numSegments; i++) {
-         sb.append(i).append(": ").append(Arrays.toString(segmentOwners[i])).append(",\n");
+         sb.append(i).append(": ").append(Arrays.toString(segmentOwners[i])).append('\n');
       }
       return sb.toString();
    }
