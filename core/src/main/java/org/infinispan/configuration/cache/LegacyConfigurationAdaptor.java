@@ -324,10 +324,10 @@ public class LegacyConfigurationAdaptor {
       }
 
       if (legacy.isCustomConsistentHashClass()) {
+         // We don't support custom consistent hash via hash.consistentHash any more, so this code is no longer called
          builder.clustering()
             .hash()
                .consistentHash(Util.<ConsistentHash>getInstance(legacy.getConsistentHashClass(), legacy.getClassLoader()));
-      
       }
       if (legacy.isCustomHashFunctionClass()) {
          builder.clustering()
