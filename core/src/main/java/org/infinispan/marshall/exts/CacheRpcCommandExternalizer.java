@@ -109,6 +109,9 @@ public final class CacheRpcCommandExternalizer extends AbstractExternalizer<Cach
       UnsignedNumeric.writeUnsignedInt(output, os.size());
       // Do not rely on the raw buffer's length which is likely to be much longer!
       output.write(os.getRawBuffer(), 0, os.size());
+      if (command instanceof TopologyAffectedCommand) {
+         output.writeInt(((TopologyAffectedCommand) command).getTopologyId());
+      }
    }
 
    private ExposedByteArrayOutputStream marshallParameters(
