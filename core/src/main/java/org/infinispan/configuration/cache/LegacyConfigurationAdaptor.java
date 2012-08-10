@@ -334,6 +334,8 @@ public class LegacyConfigurationAdaptor {
             .hash()
                .hash(Util.<Hash>getInstance(legacy.getHashFunctionClass(), legacy.getClassLoader()));
       }
+      // TODO This is just temporary, to help with the debugging of the test suite
+      builder.clustering().hash().numSegments(12);
 
       // Order is important here. First check whether state transfer itself
       // has been enabled and then check whether rehashing has been enabled,
