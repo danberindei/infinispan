@@ -197,10 +197,14 @@ public class DefaultConsistentHash implements ConsistentHash {
       sb.append("members=").append(members);
       sb.append(", numOwners=").append(numOwners);
       sb.append(", numSegments=").append(numSegments);
-      sb.append(", segmentOwners:\n");
+      sb.append(", segmentOwners={");
       for (int i = 0; i < numSegments; i++) {
-         sb.append(i).append(": ").append(Arrays.toString(segmentOwners[i])).append('\n');
+         if (i > 0) {
+            sb.append(", ");
+         }
+         sb.append(i).append(": ").append(Arrays.toString(segmentOwners[i]));
       }
+      sb.append('}');
       return sb.toString();
    }
 
