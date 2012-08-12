@@ -194,15 +194,18 @@ public class DefaultConsistentHash implements ConsistentHash {
    @Override
    public String toString() {
       StringBuilder sb = new StringBuilder("DefaultConsistentHash{");
-      sb.append("members=").append(members);
+      sb.append("numSegments=").append(numSegments);
       sb.append(", numOwners=").append(numOwners);
-      sb.append(", numSegments=").append(numSegments);
+      sb.append(", members=").append(members);
       sb.append(", segmentOwners={");
       for (int i = 0; i < numSegments; i++) {
          if (i > 0) {
             sb.append(", ");
          }
-         sb.append(i).append(": ").append(Arrays.toString(segmentOwners[i]));
+         sb.append(i).append(":");
+         for (int j = 0; j < segmentOwners[i].length; j++) {
+            sb.append(' ').append(members.indexOf(segmentOwners[i][j]));
+         }
       }
       sb.append('}');
       return sb.toString();
