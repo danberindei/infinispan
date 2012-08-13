@@ -18,15 +18,9 @@
  */
 package org.infinispan.configuration.cache;
 
-import java.util.Collections;
-import java.util.List;
-
 import org.infinispan.commons.hash.Hash;
 import org.infinispan.distribution.ch.ConsistentHash;
 import org.infinispan.distribution.ch.ConsistentHashFactory;
-import org.infinispan.remoting.transport.Address;
-import org.infinispan.remoting.transport.jgroups.JGroupsAddress;
-import org.jgroups.util.UUID;
 
 /**
  * Allows fine-tuning of rehashing characteristics. Must only used with 'distributed' cache mode.
@@ -142,7 +136,7 @@ public class HashConfiguration {
    @Override
    public String toString() {
       return "HashConfiguration{" +
-            "consistentHash=" + consistentHashFactory +
+            "consistentHashFactory=" + consistentHashFactory +
             ", hash=" + hash +
             ", numOwners=" + numOwners +
             ", numSegments=" + numSegments +
