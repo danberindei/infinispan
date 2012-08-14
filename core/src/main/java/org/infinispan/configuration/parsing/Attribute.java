@@ -51,7 +51,6 @@ public enum Attribute {
     ENABLED("enabled"),
     EXTERNALIZER_CLASS("externalizerClass"),
     FACTORY("factory"),
-    FACTORY_CLASS("factoryClass"),
     FETCH_IN_MEMORY_STATE("fetchInMemoryState"),
     FETCH_PERSISTENT_STATE("fetchPersistentState"),
     FLUSH_LOCK_TIMEOUT("flushLockTimeout"),

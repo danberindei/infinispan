@@ -1015,9 +1015,9 @@ public class Parser52 implements ConfigurationParser<ConfigurationBuilderHolder>
          String value = replaceProperties(reader.getAttributeValue(i));
          Attribute attribute = Attribute.forName(reader.getAttributeLocalName(i));
          switch (attribute) {
-            case FACTORY_CLASS:
+            case FACTORY:
                builder.clustering().hash().consistentHashFactory(Util.<ConsistentHashFactory>getInstance(value, holder.getClassLoader()));
-            case HASH_SEED_CLASS:
+            case HASH_FUNCTION_CLASS:
                builder.clustering().hash().hash(Util.<Hash>getInstance(value, holder.getClassLoader()));
                break;
             case NUM_OWNERS:

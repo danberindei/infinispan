@@ -80,7 +80,6 @@ public class HashConfigurationBuilder extends AbstractClusteringConfigurationChi
     */
    @Deprecated
    public HashConfigurationBuilder numVirtualNodes(int numVirtualNodes) {
-      if (numVirtualNodes < 1) throw new IllegalArgumentException("numVirtualNodes cannot be less than 1");
       log.hashNumVirtualNodesDeprecated();
       return this;
    }
