@@ -60,8 +60,8 @@ public class HashConfigurationBuilder extends AbstractClusteringConfigurationChi
    /**
     * The consistent hash factory in use.
     */
-   public HashConfigurationBuilder consistentHashFactory(ConsistentHashFactory consistentHash) {
-      this.consistentHashFactory = consistentHash;
+   public HashConfigurationBuilder consistentHashFactory(ConsistentHashFactory consistentHashFactory) {
+      this.consistentHashFactory = consistentHashFactory;
       return this;
    }
 
