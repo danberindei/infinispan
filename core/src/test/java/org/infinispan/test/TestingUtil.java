@@ -171,7 +171,7 @@ public class TestingUtil {
          while (cacheTopology.getCurrentCH().getMembers().size() != caches.length) {
             if (System.currentTimeMillis() > giveup) {
                String message = String.format("Timed out waiting for rehash to complete on node %s, expected member list is %s, current member list is %s!",
-                     rpcManager.getAddress(), Arrays.toString(caches), cacheTopology.getCurrentCH());
+                     rpcManager.getAddress(), Arrays.toString(caches), cacheTopology.getCurrentCH().getMembers());
                log.error(message);
                throw new RuntimeException(message);
             }
