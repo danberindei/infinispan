@@ -43,8 +43,20 @@ public class DefaultConsistentHash implements ConsistentHash {
    private final Hash hashFunction;
    private final int numSegments;
    private final int numOwners;
+
+   /**
+    * The membership of the cache topology that uses this CH.
+    */
    private final List<Address> members;
+
+   /**
+    * The routing table.
+    */
    private final Address[][] segmentOwners;
+
+   /**
+    * The length of a hash-space segment.
+    */
    private final int segmentSize;
 
    public DefaultConsistentHash(Hash hashFunction, int numSegments, int numOwners, List<Address> members,
@@ -223,6 +235,7 @@ public class DefaultConsistentHash implements ConsistentHash {
       }
 
       @Override
+      @SuppressWarnings("unchecked")
       public DefaultConsistentHash readObject(ObjectInput unmarshaller) throws IOException, ClassNotFoundException {
          int numSegments = unmarshaller.readInt();
          int numOwners = unmarshaller.readInt();
