@@ -185,7 +185,10 @@ public class StateProviderImpl implements StateProvider {
             }
          }
          List<WriteCommand> txModifications = tx.getModifications();
-         WriteCommand[] modifications = txModifications.toArray(new WriteCommand[txModifications.size()]);
+         WriteCommand[] modifications = null;
+         if (txModifications != null) {
+            modifications = txModifications.toArray(new WriteCommand[txModifications.size()]);
+         }
          transactionsToTransfer.add(new TransactionInfo(tx.getGlobalTransaction(), modifications, lockedKeys));
       }
    }
