@@ -418,7 +418,7 @@ public class StateConsumerImpl implements StateConsumer {
    }
 
    /**
-    * Remove the segment's data from the data container because we no longer own it.
+    * Remove the segment's data from the data container and cache store because we no longer own it.
     *
     * @param segments to be cancelled and discarded
     */
@@ -484,13 +484,12 @@ public class StateConsumerImpl implements StateConsumer {
       return readCh.getSegment(key);
    }
 
-   //todo [anistor] this method is identical to OutboundTransferTask.getCacheStore()
+   /**
+    * Obtains the CacheStore that will be used for purging segments that are no longer owned by this node.
+    * The CacheStore will be purged only if it is enabled and it is not shared.
+    */
    private CacheStore getCacheStore() {
-      if (configuration.clustering().cacheMode().isInvalidation()) {
-         // the cache store is ignored in case of invalidation mode caches
-         return null;
-      }
-      if (cacheLoaderManager != null && cacheLoaderManager.isEnabled() && !cacheLoaderManager.isShared() && cacheLoaderManager.isFetchPersistentState()) {
+      if (cacheLoaderManager != null && cacheLoaderManager.isEnabled() && !cacheLoaderManager.isShared()) {
          return cacheLoaderManager.getCacheStore();
       }
       return null;
