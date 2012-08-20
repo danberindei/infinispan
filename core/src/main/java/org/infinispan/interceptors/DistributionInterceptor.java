@@ -159,7 +159,7 @@ public class DistributionInterceptor extends BaseRpcInterceptor {
       return retvalCheck
             && !ctx.hasFlag(Flag.CACHE_MODE_LOCAL)
             && !ctx.hasFlag(Flag.SKIP_REMOTE_LOOKUP)
-            && ((entry = ctx.lookupEntry(key)) == null || entry.isNull() || entry.isLockPlaceholder());
+            && ((entry = ctx.lookupEntry(key)) == null || entry.isNull() || entry.isLockPlaceholder());   //todo [anistor] this condition seems wrong
    }
 
 
@@ -177,7 +177,7 @@ public class DistributionInterceptor extends BaseRpcInterceptor {
     * @throws Throwable if there are problems
     */
    private Object remoteGetAndStoreInL1(InvocationContext ctx, Object key, boolean isWrite) throws Throwable {
-      DataLocality locality = dm.getLocality(key);
+      DataLocality locality = dm.getLocality(key);  //todo [anistor] checking this here is a bit late as the state transfer was probably started or even completed since this command entered the chain
 
       if (ctx.isOriginLocal() && !locality.isLocal() && isNotInL1(key)) {
          return realRemoteGet(ctx, key, true, isWrite);
