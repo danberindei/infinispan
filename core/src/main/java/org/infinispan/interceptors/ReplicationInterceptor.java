@@ -187,6 +187,7 @@ public class ReplicationInterceptor extends BaseRpcInterceptor {
    private boolean needsRemoteGet(InvocationContext ctx, Object key) {
       final CacheEntry entry;
       return !ctx.hasFlag(Flag.CACHE_MODE_LOCAL)
+            && stateTransferManager.isStateTransferInProgressForKey(key)
             && ((entry = ctx.lookupEntry(key)) == null || entry.isNull() || entry.isLockPlaceholder());
    }
 
@@ -227,7 +228,7 @@ public class ReplicationInterceptor extends BaseRpcInterceptor {
       GlobalTransaction gtx = acquireRemoteLock ? ((TxInvocationContext)ctx).getGlobalTransaction() : null;
       ClusteredGetCommand get = cf.buildClusteredGetCommand(key, ctx.getFlags(), acquireRemoteLock, gtx);
 
-      List<Address> targets = new ArrayList<Address>(stateTransferManager.getCacheTopology().getReadConsistentHash().locateOwners(key));
+      List<Address> targets = stateTransferManager.getCacheTopology().getReadConsistentHash().locateOwners(key);
       // if any of the recipients has left the cluster since the command was issued, just don't wait for its response
       targets.retainAll(rpcManager.getTransport().getMembers());
       ResponseFilter filter = new ClusteredGetResponseValidityFilter(targets, rpcManager.getAddress());
