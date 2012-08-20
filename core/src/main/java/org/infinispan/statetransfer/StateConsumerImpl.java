@@ -354,6 +354,9 @@ public class StateConsumerImpl implements StateConsumer {
       }
 
       synchronized (this) {
+         // already active transfers do not need to be added again
+         segmentsToProcess.removeAll(transfersBySegment.keySet());
+
          while (!segmentsToProcess.isEmpty()) {
             Map<Address, Set<Integer>> segmentsBySource = new HashMap<Address, Set<Integer>>();
             for (int segmentId : segmentsToProcess) {
