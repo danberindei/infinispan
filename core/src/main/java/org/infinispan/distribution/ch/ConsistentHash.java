@@ -52,6 +52,8 @@ import java.util.Set;
  * applications may benefit from the knowledge that all the keys that map to one segment are
  * always located on the same server.
  *
+ * @see <a href="https://community.jboss.org/wiki/Non-BlockingStateTransferV2">Non-BlockingStateTransferV2</a>
+ *
  * @author Manik Surtani
  * @author Mircea.Markus@jboss.com
  * @author Dan Berindei
@@ -65,7 +67,6 @@ public interface ConsistentHash {
     *         a different number of owners.
     */
    int getNumOwners();
-
 
    Hash getHashFunction();
 
@@ -86,12 +87,12 @@ public interface ConsistentHash {
     * Should be equivalent to return the first element of {@link #locateOwners}.
     * Useful as a performance optimization, as this is a frequently needed information.
     * @param key key to locate
-    * @return
+    * @return the address of the owner
     */
    Address locatePrimaryOwner(Object key);
 
    /**
-    * Finds all the owners of a key.
+    * Finds all the owners of a key. The first element in the returned list is the primary owner.
     *
     * @param key key to locate
     * @return A list of addresses where the key resides.
@@ -133,5 +134,11 @@ public interface ConsistentHash {
     */
    Address locatePrimaryOwnerForSegment(int segmentId);
 
+   /**
+    * Returns the segments owned by a cache member.
+    *
+    * @param owner the address of the member
+    * @return a non-nul set of segment IDs
+    */
    Set<Integer> getSegmentsForOwner(Address owner);
 }
