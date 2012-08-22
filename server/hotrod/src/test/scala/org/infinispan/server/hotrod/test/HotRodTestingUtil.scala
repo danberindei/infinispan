@@ -41,7 +41,6 @@ import collection.mutable.{ArrayBuffer, ListBuffer}
 import org.jboss.netty.channel.ChannelFuture
 import org.infinispan.configuration.cache.ConfigurationBuilder
 import scala.Byte
-import org.infinispan.distribution.ch.ConsistentHash
 import scala.collection.JavaConversions._
 
 /**

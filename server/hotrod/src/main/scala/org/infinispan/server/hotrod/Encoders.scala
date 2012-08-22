@@ -25,7 +25,7 @@ import org.infinispan.remoting.transport.Address
 import org.infinispan.server.core.transport.ExtendedChannelBuffer._
 import collection.JavaConversions._
 import org.infinispan.configuration.cache.Configuration
-import org.infinispan.distribution.ch.{ConsistentHash, DefaultConsistentHash}
+import org.infinispan.distribution.ch.ConsistentHash
 import collection.mutable.ArrayBuffer
 
 /**
