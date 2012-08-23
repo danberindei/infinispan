@@ -101,7 +101,7 @@ public class InboundInvocationHandlerImpl implements InboundInvocationHandler {
    }
 
    private Response handleWithWaitForBlocks(final CacheRpcCommand cmd, final ComponentRegistry cr) throws Throwable {
-      StateTransferManager stm = cr.getComponent(StateTransferManager.class);
+      StateTransferManager stm = cr.getStateTransferManager();
       // We must have completed the join before handling commands
       // (even if we didn't complete the initial state transfer)
       if (!stm.isJoinComplete())
