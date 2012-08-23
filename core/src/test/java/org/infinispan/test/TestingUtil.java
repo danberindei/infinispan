@@ -170,8 +170,12 @@ public class TestingUtil {
          CacheTopology cacheTopology = localTopologyManager.getCacheTopology(c.getName());
          while (cacheTopology.getCurrentCH().getMembers().size() != caches.length) {
             if (System.currentTimeMillis() > giveup) {
+               Address[] addresses = new Address[caches.length];
+               for (int i = 0; i < caches.length; i++) {
+                  addresses[i] = caches[i].getCacheManager().getAddress();
+               }
                String message = String.format("Timed out waiting for rehash to complete on node %s, expected member list is %s, current member list is %s!",
-                     rpcManager.getAddress(), Arrays.toString(caches), cacheTopology.getCurrentCH().getMembers());
+                     rpcManager.getAddress(), Arrays.toString(addresses), cacheTopology.getCurrentCH().getMembers());
                log.error(message);
                throw new RuntimeException(message);
             }
