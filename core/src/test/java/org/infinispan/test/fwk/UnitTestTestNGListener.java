@@ -52,6 +52,15 @@ public class UnitTestTestNGListener implements ITestListener, IInvokedMethodList
    private AtomicInteger skipped = new AtomicInteger(0);
    private AtomicBoolean oomHandled = new AtomicBoolean();
 
+   static {
+      Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+         @Override
+         public void uncaughtException(Thread t, Throwable e) {
+            log.errorf(e, "Uncaught exception on thread %s", t);
+         }
+      });
+   }
+
    public void onTestStart(ITestResult res) {
       log.info("Starting test " + getTestDesc(res));
       addOomLoggingSupport();
