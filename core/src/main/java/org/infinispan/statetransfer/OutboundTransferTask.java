@@ -43,7 +43,7 @@ import org.infinispan.util.logging.LogFactory;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 
 /**
  * Outbound state transfer task. Pushes data segments to another cluster member on request. Instances of
@@ -93,7 +93,7 @@ public class OutboundTransferTask implements Runnable {
    /**
     * The Future obtained from submitting this task to an executor service. This is used for cancellation.
     */
-   private Future runnableFuture;
+   private FutureTask runnableFuture;
 
    public OutboundTransferTask(Address destination, Set<Integer> segments, int stateTransferChunkSize,
                                int topologyId, ConsistentHash readCh, StateProviderImpl stateProvider, DataContainer dataContainer,
@@ -126,7 +126,13 @@ public class OutboundTransferTask implements Runnable {
       if (runnableFuture != null) {
          throw new IllegalStateException("This task was already submitted");
       }
-      runnableFuture = executorService.submit(this);
+      runnableFuture = new FutureTask<Void>(this, null) {
+         @Override
+         protected void done() {
+            stateProvider.onTaskCompletion(OutboundTransferTask.this);
+         }
+      };
+      executorService.submit(runnableFuture);
    }
 
    public Address getDestination() {
@@ -172,7 +178,7 @@ public class OutboundTransferTask implements Runnable {
             }
          } else {
             if (trace) {
-               log.tracef("No cache store or the cache store is shared, no need to send any stored cache entries for segments %s", segments);
+               log.tracef("No cache store or the cache store is shared, no need to send any stored cache entries for segments: %s", segments);
             }
          }
 
@@ -189,8 +195,9 @@ public class OutboundTransferTask implements Runnable {
          if (!runnableFuture.isCancelled()) {
             log.error("Failed to execute outbound transfer", t);
          }
-      } finally {
-         stateProvider.onTaskCompletion(this);
+      }
+      if (trace) {
+         log.tracef("Outbound transfer of segments %s to %s is complete", segments, destination);
       }
    }
 
@@ -224,7 +231,7 @@ public class OutboundTransferTask implements Runnable {
    private void sendEntries(List<InternalCacheEntry> entries, int segmentId, boolean isLastChunk) {
       if (trace) {
          log.tracef("Sending %d cache entries from segment %d to %s", entries.size(), segmentId, destination);
-      }
+      }                                                                                             //todo [anistor] send back received topologyId or my local one?
       StateResponseCommand cmd = commandsFactory.buildStateResponseCommand(rpcManager.getAddress(), topologyId, segmentId, entries, isLastChunk);
       // send synchronously, in FIFO mode. it is important that the last chunk is received last in order to correctly detect completion of the stream of chunks
       rpcManager.invokeRemotelyInFuture(Collections.singleton(destination), cmd, false, sendFuture, timeout);
@@ -254,7 +261,10 @@ public class OutboundTransferTask implements Runnable {
       if (runnableFuture != null && !runnableFuture.isCancelled()) {
          runnableFuture.cancel(true);
          sendFuture.cancel(true);
-         stateProvider.onTaskCompletion(this);
       }
+   }
+
+   public boolean isCancelled() {
+      return runnableFuture != null && runnableFuture.isCancelled();
    }
 }
