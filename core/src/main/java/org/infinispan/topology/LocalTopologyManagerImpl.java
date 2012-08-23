@@ -139,6 +139,7 @@ public class LocalTopologyManagerImpl implements LocalTopologyManager {
 
    @Override
    public void handleConsistentHashUpdate(String cacheName, CacheTopology cacheTopology) {
+      // TODO Check the sender and the view id for all commands, not just for joins. See ISPN-2186
       LocalCacheStatus cacheStatus = runningCaches.get(cacheName);
       if (cacheStatus == null) {
          log.tracef("Ignoring consistent hash update %s for cache %s that doesn't exist locally",
