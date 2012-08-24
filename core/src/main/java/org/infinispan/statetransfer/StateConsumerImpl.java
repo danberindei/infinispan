@@ -81,16 +81,17 @@ public class StateConsumerImpl implements StateConsumer {
    private Configuration configuration;
    private GlobalConfiguration globalConfiguration;
    private RpcManager rpcManager;
-   private GroupManager groupManager;
+   private GroupManager groupManager;               // optional
    private CommandsFactory commandsFactory;
-   private TransactionTable transactionTable;
+   private TransactionTable transactionTable;       // optional
    private DataContainer dataContainer;
-   private CacheLoaderManager cacheLoaderManager;
+   private CacheLoaderManager cacheLoaderManager;   // optional
    private InterceptorChain interceptorChain;
    private InvocationContextContainer icc;
    private StateTransferLock stateTransferLock;
    private long timeout;
    private boolean useVersionedPut;
+   private boolean fetchEnabled;
 
    /**
     * Current topology id.
@@ -174,6 +175,8 @@ public class StateConsumerImpl implements StateConsumer {
             configuration.clustering().cacheMode().isClustered();
 
       timeout = configuration.clustering().stateTransfer().timeout();
+
+      fetchEnabled = configuration.clustering().stateTransfer().fetchInMemoryState() && !configuration.clustering().cacheMode().isInvalidation();
    }
 
    public boolean isStateTransferInProgress() {
@@ -194,7 +197,7 @@ public class StateConsumerImpl implements StateConsumer {
    }
 
    @Override
-   public void onTopologyUpdate(CacheTopology cacheTopology, boolean isRebalance) {
+   public void onTopologyUpdate(CacheTopology cacheTopology, boolean isRebalance) { //todo [anistor] make private
       ConsistentHash readCh = cacheTopology.getReadConsistentHash();
       ConsistentHash writeCh = cacheTopology.getWriteConsistentHash();
       int topologyId = cacheTopology.getTopologyId();
@@ -218,7 +221,7 @@ public class StateConsumerImpl implements StateConsumer {
          Set<Integer> addedSegments = null;
          if (previousCh == null) {
             // we start fresh, without any data, so we need to pull everything we own according to writeCh
-            if (configuration.clustering().stateTransfer().fetchInMemoryState() && !configuration.clustering().cacheMode().isInvalidation()) {
+            if (fetchEnabled) {
                addedSegments = getOwnedSegments(writeCh);
             }
          } else {
@@ -232,7 +235,7 @@ public class StateConsumerImpl implements StateConsumer {
             // remove inbound transfers and any data for segments we no longer own
             discardSegments(removedSegments);       //todo [anistor] what do we do with transactions and locks of removed segments?
 
-            if (configuration.clustering().stateTransfer().fetchInMemoryState() && !configuration.clustering().cacheMode().isInvalidation()) {
+            if (fetchEnabled) {
                Set<Integer> currentSegments = getOwnedSegments(readCh);
                addedSegments = new HashSet<Integer>(newSegments);
                addedSegments.removeAll(currentSegments);
@@ -346,23 +349,26 @@ public class StateConsumerImpl implements StateConsumer {
    }
 
    public void applyTransactions(Address sender, int topologyId, Collection<TransactionInfo> transactions) {
-      log.debugf("Transferring %d transaction from %s", transactions.size(), sender);
-      for (TransactionInfo transactionInfo : transactions) {
-         CacheTransaction tx = transactionTable.getLocalTransaction(transactionInfo.getGlobalTransaction());
-         if (tx == null) {
-            tx = transactionTable.getRemoteTransaction(transactionInfo.getGlobalTransaction());
+      log.debugf("Applying %d transactions transferred from %s", transactions.size(), sender);
+      if (configuration.transaction().transactionMode().isTransactional()) {
+         for (TransactionInfo transactionInfo : transactions) {
+            CacheTransaction tx = transactionTable.getLocalTransaction(transactionInfo.getGlobalTransaction());
             if (tx == null) {
-               tx = transactionTable.createRemoteTransaction(transactionInfo.getGlobalTransaction(), transactionInfo.getModifications());
+               tx = transactionTable.getRemoteTransaction(transactionInfo.getGlobalTransaction());
+               if (tx == null) {
+                  tx = transactionTable.createRemoteTransaction(transactionInfo.getGlobalTransaction(), transactionInfo.getModifications());
+               }
             }
-         }
-         for (Object key : transactionInfo.getLockedKeys()) {
-            tx.addBackupLockForKey(key);
+            for (Object key : transactionInfo.getLockedKeys()) {
+               tx.addBackupLockForKey(key);
+            }
          }
       }
    }
 
    // needs to be AFTER the DistributionManager and *after* the cache loader manager (if any) inits and preloads
    @Start(priority = 60)
+   @Override
    public void start() throws Exception {
       if (trace) {
          log.tracef("Starting StateConsumer on %s", rpcManager.getAddress());
@@ -424,7 +430,7 @@ public class StateConsumerImpl implements StateConsumer {
       ConsistentHash oldCH = oldCacheTopology != null ? oldCacheTopology.getWriteConsistentHash() : null;
       ConsistentHash newCH = newCacheTopology.getWriteConsistentHash();
 
-      cacheNotifier.notifyTopologyChanged(oldCH, newCH, true);
+      cacheNotifier.notifyTopologyChanged(oldCH, newCH, true);    //todo [anistor] one of these two notifications is useless
       cacheNotifier.notifyTopologyChanged(oldCH, newCH, false);
 
       stateProvider.onTopologyUpdate(newCacheTopology, isRebalance);
@@ -452,8 +458,8 @@ public class StateConsumerImpl implements StateConsumer {
       return new CacheTopology(cacheTopology.getTopologyId(), currentCH, pendingCH);
    }
 
-   @Override
    @Stop(priority = 20)
+   @Override
    public void stop() {
       if (trace) {
          log.tracef("Shutting down StateConsumer of cache %s on node %s", cacheName, rpcManager.getAddress());
@@ -537,17 +543,21 @@ public class StateConsumerImpl implements StateConsumer {
                inboundTransfers.add(inboundTransfer);
 
                // if requesting the transactions fails we need to retry from another source
-               if (inboundTransfer.requestTransactions()) {
-                  if (!inboundTransfer.requestSegments()) {
-                     log.errorf("Failed to request segments %s from %s", segmentsFromSource, source);
-                     //todo [anistor] maybe I need to remove this transfer to be retried from another source
+               if (configuration.transaction().transactionMode().isTransactional()) {
+                  if (!inboundTransfer.requestTransactions()) {
+                     log.errorf("Failed to retrieve transactions for segments %s from node %s (node will be blacklisted)", segmentsFromSource, source);
+                     failedSegments.addAll(segmentsFromSource);
+                     blacklistedSources.add(source);
+                     removeTransfer(inboundTransfer);  // will be retried from another source
+                     continue;
                   }
-               } else {
-                  log.errorf("Failed to retrieve transactions for segments %s from %s", segmentsFromSource, source);
-                  log.tracef("Adding members %s to black list", source);
+               }
+
+               if (!inboundTransfer.requestSegments()) {
+                  log.errorf("Failed to request segments %s from node %s (node will be blacklisted)", segmentsFromSource, source);
                   failedSegments.addAll(segmentsFromSource);
                   blacklistedSources.add(source);
-                  removeTransfer(inboundTransfer);
+                  removeTransfer(inboundTransfer);  // will be retried from another source
                }
             }
 

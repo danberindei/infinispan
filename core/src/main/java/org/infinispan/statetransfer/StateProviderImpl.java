@@ -31,8 +31,13 @@ import org.infinispan.container.DataContainer;
 import org.infinispan.distribution.ch.ConsistentHash;
 import org.infinispan.factories.annotations.ComponentName;
 import org.infinispan.factories.annotations.Inject;
+import org.infinispan.factories.annotations.Start;
 import org.infinispan.factories.annotations.Stop;
 import org.infinispan.loaders.CacheLoaderManager;
+import org.infinispan.notifications.Listener;
+import org.infinispan.notifications.cachelistener.CacheNotifier;
+import org.infinispan.notifications.cachelistener.annotation.TopologyChanged;
+import org.infinispan.notifications.cachelistener.event.TopologyChangedEvent;
 import org.infinispan.remoting.rpc.RpcManager;
 import org.infinispan.remoting.transport.Address;
 import org.infinispan.topology.CacheTopology;
@@ -52,6 +57,7 @@ import static org.infinispan.factories.KnownComponentNames.ASYNC_TRANSPORT_EXECU
  * @author anistor@redhat.com
  * @since 5.2
  */
+@Listener
 public class StateProviderImpl implements StateProvider {
 
    private static final Log log = LogFactory.getLog(StateProviderImpl.class);
@@ -61,7 +67,8 @@ public class StateProviderImpl implements StateProvider {
    private Configuration configuration;
    private RpcManager rpcManager;
    private CommandsFactory commandsFactory;
-   private TransactionTable transactionTable;
+   private CacheNotifier cacheNotifier;
+   private TransactionTable transactionTable;     // optional
    private DataContainer dataContainer;
    private CacheLoaderManager cacheLoaderManager; // optional
    private ExecutorService executorService;
@@ -87,6 +94,7 @@ public class StateProviderImpl implements StateProvider {
                     Configuration configuration,
                     RpcManager rpcManager,
                     CommandsFactory commandsFactory,
+                    CacheNotifier cacheNotifier,
                     CacheLoaderManager cacheLoaderManager,
                     DataContainer dataContainer,
                     TransactionTable transactionTable,
@@ -96,6 +104,7 @@ public class StateProviderImpl implements StateProvider {
       this.configuration = configuration;
       this.rpcManager = rpcManager;
       this.commandsFactory = commandsFactory;
+      this.cacheNotifier = cacheNotifier;
       this.cacheLoaderManager = cacheLoaderManager;
       this.dataContainer = dataContainer;
       this.transactionTable = transactionTable;
@@ -112,6 +121,14 @@ public class StateProviderImpl implements StateProvider {
       synchronized (transfersByDestination) {
          return !transfersByDestination.isEmpty();
       }
+   }
+
+   @TopologyChanged
+   public void onTopologyChange(TopologyChangedEvent<?, ?> tce) {
+      // do all the work AFTER the consistent hash has changed
+      if (tce.isPre())
+         return;
+      //todo [anistor] move all code from onTopologyUpdate here and remove dependency StateConsumer->StateProvider
    }
 
    public void onTopologyUpdate(CacheTopology cacheTopology, boolean isRebalance) {
@@ -132,9 +149,18 @@ public class StateProviderImpl implements StateProvider {
             }
          }
       }
+
+      //todo [anistor] must cancel transfers for all segments that we no longer own
+   }
+
+   @Start(priority = 60)
+   @Override
+   public void start() {
+      cacheNotifier.addListener(this);
    }
 
    @Stop(priority = 20)
+   @Override
    public void stop() {
       if (trace) {
          log.tracef("Shutting down StateProvider of cache %s on node %s", cacheName, rpcManager.getAddress());
@@ -150,7 +176,7 @@ public class StateProviderImpl implements StateProvider {
                }
             }
          }
-      } catch (Throwable t){
+      } catch (Throwable t) {
          log.errorf(t, "Failed to stop StateProvider of cache %s on node %s", cacheName, rpcManager.getAddress());
       }
    }
