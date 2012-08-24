@@ -167,7 +167,7 @@ public class TestingUtil {
       for (Cache c : caches) {
          LocalTopologyManager localTopologyManager = TestingUtil.extractGlobalComponent(c.getCacheManager(), LocalTopologyManager.class);
          RpcManager rpcManager = TestingUtil.extractComponent(c, RpcManager.class);
-         CacheTopology cacheTopology = localTopologyManager.getCacheTopology(c.getName());
+         CacheTopology cacheTopology = cacheTopology = localTopologyManager.getCacheTopology(c.getName());
          while (cacheTopology.getCurrentCH().getMembers().size() != caches.length) {
             if (System.currentTimeMillis() > giveup) {
                Address[] addresses = new Address[caches.length];
@@ -180,6 +180,7 @@ public class TestingUtil {
                throw new RuntimeException(message);
             }
             LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+            cacheTopology = localTopologyManager.getCacheTopology(c.getName());
          }
          log.trace("Node " + rpcManager.getAddress() + " finished rehash task.");
       }
@@ -200,6 +201,7 @@ public class TestingUtil {
             throw new RuntimeException(message);
          }
          LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
+         cacheTopology = localTopologyManager.getCacheTopology(cache.getName());
       }
       log.trace("Node " + rpcManager.getAddress() + " finished rehash task.");
    }
