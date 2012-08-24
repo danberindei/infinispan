@@ -28,29 +28,21 @@ import org.infinispan.CacheException;
 import org.infinispan.commands.CommandsFactory;
 import org.infinispan.commands.write.InvalidateCommand;
 import org.infinispan.commands.write.PutKeyValueCommand;
-import org.infinispan.configuration.cache.CacheMode;
 import org.infinispan.configuration.cache.Configuration;
-import org.infinispan.configuration.global.GlobalConfiguration;
 import org.infinispan.container.DataContainer;
 import org.infinispan.container.entries.InternalCacheEntry;
 import org.infinispan.context.InvocationContext;
 import org.infinispan.context.InvocationContextContainer;
-import org.infinispan.distribution.ch.*;
-import org.infinispan.distribution.group.GroupManager;
-import org.infinispan.distribution.group.GroupingConsistentHash;
+import org.infinispan.distribution.ch.ConsistentHash;
 import org.infinispan.factories.annotations.Inject;
-import org.infinispan.factories.annotations.Start;
 import org.infinispan.factories.annotations.Stop;
 import org.infinispan.interceptors.InterceptorChain;
 import org.infinispan.loaders.CacheLoaderException;
 import org.infinispan.loaders.CacheLoaderManager;
 import org.infinispan.loaders.CacheStore;
-import org.infinispan.notifications.cachelistener.CacheNotifier;
 import org.infinispan.remoting.rpc.RpcManager;
 import org.infinispan.remoting.transport.Address;
-import org.infinispan.topology.CacheJoinInfo;
 import org.infinispan.topology.CacheTopology;
-import org.infinispan.topology.CacheTopologyHandler;
 import org.infinispan.topology.LocalTopologyManager;
 import org.infinispan.transaction.LockingMode;
 import org.infinispan.transaction.TransactionTable;
@@ -74,14 +66,10 @@ public class StateConsumerImpl implements StateConsumer {
    private static final Log log = LogFactory.getLog(StateConsumerImpl.class);
    private static final boolean trace = log.isTraceEnabled();
 
-   private StateProvider stateProvider;
    private LocalTopologyManager localTopologyManager;
    private String cacheName;
-   private CacheNotifier cacheNotifier;
    private Configuration configuration;
-   private GlobalConfiguration globalConfiguration;
    private RpcManager rpcManager;
-   private GroupManager groupManager;               // optional
    private CommandsFactory commandsFactory;
    private TransactionTable transactionTable;       // optional
    private DataContainer dataContainer;
@@ -93,28 +81,13 @@ public class StateConsumerImpl implements StateConsumer {
    private boolean useVersionedPut;
    private boolean fetchEnabled;
 
-   /**
-    * Current topology id.
-    */
-   private int topologyId;
-
-   /**
-    * CH used for read operations. It is never null.
-    */
-   private ConsistentHash readCh;
-
-   /**
-    * CH used for write operations. In some cases this can be the same as readCh. It is never null.
-    */
-   private ConsistentHash writeCh;
-
    private volatile CacheTopology cacheTopology;
 
    /**
     * The number of topology updates that are being processed concurrently (in method onTopologyUpdate()).
     * This is needed to be able to detect completion.
     */
-   private int isTopologyUpdate = 0;
+   private int activeTopologyUpdates = 0;
 
    private volatile boolean rebalanceInProgress;
 
@@ -137,30 +110,22 @@ public class StateConsumerImpl implements StateConsumer {
 
    @Inject
    public void init(Cache cache,
-                    StateProvider stateProvider,
                     LocalTopologyManager localTopologyManager,
-                    CacheNotifier cacheNotifier,
                     InterceptorChain interceptorChain,
                     InvocationContextContainer icc,
                     Configuration configuration,
-                    GlobalConfiguration globalConfiguration,
                     RpcManager rpcManager,
-                    GroupManager groupManager,
                     CommandsFactory commandsFactory,
                     CacheLoaderManager cacheLoaderManager,
                     DataContainer dataContainer,
                     TransactionTable transactionTable,
                     StateTransferLock stateTransferLock) {
       this.cacheName = cache.getName();
-      this.stateProvider = stateProvider;
       this.localTopologyManager = localTopologyManager;
-      this.cacheNotifier = cacheNotifier;
       this.interceptorChain = interceptorChain;
       this.icc = icc;
       this.configuration = configuration;
-      this.globalConfiguration = globalConfiguration;
       this.rpcManager = rpcManager;
-      this.groupManager = groupManager;
       this.commandsFactory = commandsFactory;
       this.cacheLoaderManager = cacheLoaderManager;
       this.dataContainer = dataContainer;
@@ -192,41 +157,34 @@ public class StateConsumerImpl implements StateConsumer {
       }
       // todo [anistor] also return true for keys to be removed (now we report only keys to be added)
       synchronized (this) {
-         return readCh != null && transfersBySegment.containsKey(getSegment(key));
+         return cacheTopology != null && transfersBySegment.containsKey(getSegment(key));
       }
    }
 
    @Override
-   public void onTopologyUpdate(CacheTopology cacheTopology, boolean isRebalance) { //todo [anistor] make private
-      ConsistentHash readCh = cacheTopology.getReadConsistentHash();
-      ConsistentHash writeCh = cacheTopology.getWriteConsistentHash();
-      int topologyId = cacheTopology.getTopologyId();
-
-      if (trace) log.tracef("Received new CH: %s", writeCh);
+   public void onTopologyUpdate(CacheTopology cacheTopology, boolean isRebalance) {
+      if (trace) log.tracef("Received new CH: %s", cacheTopology.getWriteConsistentHash());
 
       ConsistentHash previousCh;
       synchronized (this) {
-         isTopologyUpdate++;
-         this.cacheTopology = cacheTopology;
-         this.topologyId = cacheTopology.getTopologyId();
+         activeTopologyUpdates++;
          rebalanceInProgress |= isRebalance;
-         previousCh = this.writeCh != null ? this.writeCh : this.readCh;
-         this.readCh = readCh;
-         this.writeCh = writeCh;
+         previousCh = this.cacheTopology != null ? this.cacheTopology.getWriteConsistentHash() : null;
+         this.cacheTopology = cacheTopology;
       }
 
-      stateTransferLock.setTopologyId(topologyId);
+      stateTransferLock.setTopologyId(cacheTopology.getTopologyId());
 
       try {
          Set<Integer> addedSegments = null;
          if (previousCh == null) {
             // we start fresh, without any data, so we need to pull everything we own according to writeCh
             if (fetchEnabled) {
-               addedSegments = getOwnedSegments(writeCh);
+               addedSegments = getOwnedSegments(cacheTopology.getWriteConsistentHash());
             }
          } else {
             Set<Integer> previousSegments = getOwnedSegments(previousCh);
-            Set<Integer> newSegments = getOwnedSegments(writeCh);
+            Set<Integer> newSegments = getOwnedSegments(cacheTopology.getWriteConsistentHash());
 
             // we need to diff the routing tables of the two CHes
             Set<Integer> removedSegments = new HashSet<Integer>(previousSegments);
@@ -236,12 +194,12 @@ public class StateConsumerImpl implements StateConsumer {
             discardSegments(removedSegments);       //todo [anistor] what do we do with transactions and locks of removed segments?
 
             if (fetchEnabled) {
-               Set<Integer> currentSegments = getOwnedSegments(readCh);
+               Set<Integer> currentSegments = getOwnedSegments(cacheTopology.getReadConsistentHash());
                addedSegments = new HashSet<Integer>(newSegments);
                addedSegments.removeAll(currentSegments);
 
                // check if any of the existing transfers should be restarted from a different source because the initial source is no longer a member
-               Set<Address> members = new HashSet<Address>(readCh.getMembers());
+               Set<Address> members = new HashSet<Address>(cacheTopology.getReadConsistentHash().getMembers());
                synchronized (this) {
                   for (Address source : transfersBySource.keySet()) {
                      if (!members.contains(source)) {
@@ -270,9 +228,9 @@ public class StateConsumerImpl implements StateConsumer {
          }
       } finally {
          synchronized (this) {
-            isTopologyUpdate--;
-            if (isTopologyUpdate == 0 && !isStateTransferInProgress()) {
-               notifyEndOfStateTransfer(topologyId);
+            activeTopologyUpdates--;
+            if (activeTopologyUpdates == 0 && !isStateTransferInProgress()) {
+               notifyEndOfStateTransfer(cacheTopology.getTopologyId());
             }
          }
       }
@@ -291,10 +249,10 @@ public class StateConsumerImpl implements StateConsumer {
             : Collections.<Integer>emptySet();
    }
 
-   //todo [anistor] check topologyId
    public void applyState(Address sender, int topologyId, int segmentId, Collection<InternalCacheEntry> cacheEntries, boolean isLastChunk) {
       // it's possible to receive a late message so we must be prepared to ignore segments we no longer own
-      if (writeCh == null || !writeCh.getSegmentsForOwner(rpcManager.getAddress()).contains(segmentId)) {
+      //todo [anistor] this check should be based on topologyId
+      if (!cacheTopology.getWriteConsistentHash().getSegmentsForOwner(rpcManager.getAddress()).contains(segmentId)) {
          if (trace) {
             log.tracef("Discarding received cache entries for segment %d because they do not belong to this node.", segmentId);
          }
@@ -340,7 +298,7 @@ public class StateConsumerImpl implements StateConsumer {
             PutKeyValueCommand put = useVersionedPut ?
                   commandsFactory.buildVersionedPutKeyValueCommand(e.getKey(), e.getValue(), e.getLifespan(), e.getMaxIdle(), e.getVersion(), ctx.getFlags())
                   : commandsFactory.buildPutKeyValueCommand(e.getKey(), e.getValue(), e.getLifespan(), e.getMaxIdle(), ctx.getFlags());
-            put.setPutIfAbsent(true); //todo [anistor] this still does not solve removal cases. we need tombstones for deleted keys. we need to keep a separate map of deleted keys an use it during apply state
+            put.setPutIfAbsent(true); //todo [anistor] this still does not solve removal cases. we need tombstones for deleted keys. we need to keep a separate set of deleted keys an use it during apply state
             interceptorChain.invoke(ctx, put);
          } catch (Exception ex) {
             log.problemApplyingStateForKey(ex.getMessage(), e.getKey());
@@ -366,98 +324,6 @@ public class StateConsumerImpl implements StateConsumer {
       }
    }
 
-   // needs to be AFTER the DistributionManager and *after* the cache loader manager (if any) inits and preloads
-   @Start(priority = 60)
-   @Override
-   public void start() throws Exception {
-      if (trace) {
-         log.tracef("Starting StateConsumer on %s", rpcManager.getAddress());
-      }
-
-      CacheJoinInfo joinInfo = new CacheJoinInfo(
-            pickConsistentHashFactory(),
-            configuration.clustering().hash().hash(),
-            configuration.clustering().hash().numSegments(),
-            configuration.clustering().hash().numOwners(),
-            configuration.clustering().stateTransfer().timeout(),
-            rpcManager.getTransport().getViewId());
-
-      localTopologyManager.join(cacheName, joinInfo, new CacheTopologyHandler() {
-         @Override
-         public void updateConsistentHash(CacheTopology cacheTopology) {
-            doTopologyUpdate(cacheTopology, false);
-         }
-
-         @Override
-         public void rebalance(CacheTopology cacheTopology) {
-            doTopologyUpdate(cacheTopology, true);
-         }
-      });
-   }
-
-   /**
-    * If no ConsistentHashFactory was explicitly configured we choose a suitable one based on cache mode.
-    */
-   private ConsistentHashFactory pickConsistentHashFactory() {
-      ConsistentHashFactory factory = configuration.clustering().hash().consistentHashFactory();
-      if (factory == null) {
-         CacheMode cacheMode = configuration.clustering().cacheMode();
-         if (cacheMode.isClustered()) {
-            if (cacheMode.isDistributed()) {
-               if (globalConfiguration.transport().hasTopologyInfo()) {
-                  factory = new TopologyAwareConsistentHashFactory();
-               } else {
-                  factory = new DefaultConsistentHashFactory();
-               }
-            } else {
-               // this is also used for invalidation mode
-               factory = new ReplicatedConsistentHashFactory();
-            }
-         }
-      }
-      return factory;
-   }
-
-   private void doTopologyUpdate(CacheTopology newCacheTopology, boolean isRebalance) {
-      if (trace) {
-         log.tracef("Installing new cache topology %s", newCacheTopology);
-      }
-
-      // handle grouping
-      newCacheTopology = addGrouping(newCacheTopology);
-
-      CacheTopology oldCacheTopology = cacheTopology;
-      ConsistentHash oldCH = oldCacheTopology != null ? oldCacheTopology.getWriteConsistentHash() : null;
-      ConsistentHash newCH = newCacheTopology.getWriteConsistentHash();
-
-      cacheNotifier.notifyTopologyChanged(oldCH, newCH, true);    //todo [anistor] one of these two notifications is useless
-      cacheNotifier.notifyTopologyChanged(oldCH, newCH, false);
-
-      stateProvider.onTopologyUpdate(newCacheTopology, isRebalance);
-      onTopologyUpdate(newCacheTopology, isRebalance);
-   }
-
-   /**
-    * Decorates the given cache topology to add key grouping. The ConsistentHash objects of the cache topology
-    * are wrapped to provide key grouping (if configured).
-    *
-    * @param cacheTopology the given cache topology
-    * @return the decorated topology
-    */
-   private CacheTopology addGrouping(CacheTopology cacheTopology) {
-      if (groupManager == null) {
-         return cacheTopology;
-      }
-
-      ConsistentHash currentCH = cacheTopology.getCurrentCH();
-      currentCH = new GroupingConsistentHash(currentCH, groupManager);
-      ConsistentHash pendingCH = cacheTopology.getPendingCH();
-      if (pendingCH != null) {
-         pendingCH = new GroupingConsistentHash(pendingCH, groupManager);
-      }
-      return new CacheTopology(cacheTopology.getTopologyId(), currentCH, pendingCH);
-   }
-
    @Stop(priority = 20)
    @Override
    public void stop() {
@@ -481,8 +347,6 @@ public class StateConsumerImpl implements StateConsumer {
       } catch (Throwable t) {
          log.errorf(t, "Failed to stop StateConsumer of cache %s on node %s", cacheName, rpcManager.getAddress());
       }
-
-      localTopologyManager.leave(cacheName);
    }
 
    @Override
@@ -531,7 +395,7 @@ public class StateConsumerImpl implements StateConsumer {
             Set<Integer> failedSegments = new HashSet<Integer>();
             for (Address source : segmentsBySource.keySet()) {
                Set<Integer> segmentsFromSource = segmentsBySource.get(source);
-               InboundTransferTask inboundTransfer = new InboundTransferTask(segmentsFromSource, source, topologyId, this, rpcManager, commandsFactory, timeout);
+               InboundTransferTask inboundTransfer = new InboundTransferTask(segmentsFromSource, source, cacheTopology.getTopologyId(), this, rpcManager, commandsFactory, timeout);
                for (int segmentId : segmentsFromSource) {
                   transfersBySegment.put(segmentId, inboundTransfer);
                }
@@ -567,7 +431,7 @@ public class StateConsumerImpl implements StateConsumer {
    }
 
    private Address pickSourceOwner(int segmentId, Set<Address> blacklistedSources) {
-      List<Address> owners = readCh.locateOwnersForSegment(segmentId);
+      List<Address> owners = cacheTopology.getReadConsistentHash().locateOwnersForSegment(segmentId);
       if (owners.size() == 1 && owners.get(0).equals(rpcManager.getAddress())) {
          return null;
       }
@@ -646,7 +510,7 @@ public class StateConsumerImpl implements StateConsumer {
 
    private int getSegment(Object key) {
       // there we can use any CH version because the routing table is not involved
-      return readCh.getSegment(key);
+      return cacheTopology.getReadConsistentHash().getSegment(key);
    }
 
    /**
@@ -681,10 +545,10 @@ public class StateConsumerImpl implements StateConsumer {
 
       boolean allTasksCompleted;
       synchronized (this) {
-         allTasksCompleted = isTopologyUpdate == 0 && !isStateTransferInProgress();
+         allTasksCompleted = activeTopologyUpdates == 0 && !isStateTransferInProgress();
       }
       if (allTasksCompleted) {
-         notifyEndOfStateTransfer(topologyId);
+         notifyEndOfStateTransfer(cacheTopology.getTopologyId());
       }
    }
 }
