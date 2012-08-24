@@ -568,9 +568,13 @@ public class StateConsumerImpl implements StateConsumer {
 
    private Address pickSourceOwner(int segmentId, Set<Address> blacklistedSources) {
       List<Address> owners = readCh.locateOwnersForSegment(segmentId);
-      for (int i = owners.size() - 1; i >= 0; i--) {
+      if (owners.size() == 1 && owners.get(0).equals(rpcManager.getAddress())) {
+         return null;
+      }
+
+      for (int i = owners.size() - 1; i >= 0; i--) {   // iterate backwards because we prefer to fetch from newer nodes
          Address o = owners.get(i);
-         if (!blacklistedSources.contains(o) && !o.equals(rpcManager.getAddress())) {
+         if (!o.equals(rpcManager.getAddress()) && !blacklistedSources.contains(o)) {
             return o;
          }
       }
