@@ -578,7 +578,7 @@ public class StateConsumerImpl implements StateConsumer {
             return o;
          }
       }
-      log.errorf("No live owners found for segment %d. Current owners are %s", segmentId, owners);
+      log.errorf("No live owners found for segment %d. Current owners are:  %s. Blacklisted owners: %s", segmentId, owners, blacklistedSources);
       return null;
    }
 
