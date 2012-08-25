@@ -248,6 +248,7 @@ public class DefaultRebalancePolicy implements RebalancePolicy {
          if (isRebalanceInProgress) {
             log.tracef("Ignoring request to start rebalancing cache %s, there's already a rebalance in progress: %s",
                   cacheName, cacheStatus.getCacheTopology());
+            return;
          }
          log.tracef("Rebalancing consistent hash for cache %s", cacheName);
          int newTopologyId = cacheStatus.getCacheTopology().getTopologyId() + 1;
@@ -257,6 +258,7 @@ public class DefaultRebalancePolicy implements RebalancePolicy {
          ConsistentHash balancedCH = chFactory.rebalance(updatedMembersCH);
          if (balancedCH.equals(currentCH)) {
             log.tracef("The balanced CH is the same as the current CH, stopping rebalance");
+            return;
          }
          CacheTopology cacheTopology = new CacheTopology(newTopologyId, currentCH, balancedCH);
          log.tracef("Updating cache %s topology: %s", cacheName, cacheTopology);
