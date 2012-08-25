@@ -52,6 +52,8 @@ import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.infinispan.context.Flag.*;
 
@@ -87,9 +89,12 @@ public class StateConsumerImpl implements StateConsumer {
     * The number of topology updates that are being processed concurrently (in method onTopologyUpdate()).
     * This is needed to be able to detect completion.
     */
-   private int activeTopologyUpdates = 0;
+   private AtomicInteger activeTopologyUpdates = new AtomicInteger(0);
 
-   private volatile boolean rebalanceInProgress;
+   /**
+    * Indicates if currently executing topology update is a rabalance.
+    */
+   private AtomicBoolean rebalanceInProgress = new AtomicBoolean(false);
 
    /**
     * A map that keeps track of current inbound state transfers by source address. There could be multiple transfers
@@ -165,13 +170,12 @@ public class StateConsumerImpl implements StateConsumer {
    public void onTopologyUpdate(CacheTopology cacheTopology, boolean isRebalance) {
       if (trace) log.tracef("Received new CH: %s", cacheTopology.getWriteConsistentHash());
 
-      ConsistentHash previousCh;
-      synchronized (this) {
-         activeTopologyUpdates++;
-         rebalanceInProgress |= isRebalance;
-         previousCh = this.cacheTopology != null ? this.cacheTopology.getWriteConsistentHash() : null;
-         this.cacheTopology = cacheTopology;
+      activeTopologyUpdates.incrementAndGet();
+      if (isRebalance) {
+         rebalanceInProgress.set(true);
       }
+      ConsistentHash previousCh = this.cacheTopology != null ? this.cacheTopology.getWriteConsistentHash() : null;
+      this.cacheTopology = cacheTopology;
 
       stateTransferLock.setTopologyId(cacheTopology.getTopologyId());
 
@@ -191,7 +195,7 @@ public class StateConsumerImpl implements StateConsumer {
             removedSegments.removeAll(newSegments);
 
             // remove inbound transfers and any data for segments we no longer own
-            discardSegments(removedSegments);       //todo [anistor] what do we do with transactions and locks of removed segments?
+            discardSegments(removedSegments);
 
             if (fetchEnabled) {
                Set<Integer> currentSegments = getOwnedSegments(cacheTopology.getReadConsistentHash());
@@ -206,10 +210,8 @@ public class StateConsumerImpl implements StateConsumer {
                         List<InboundTransferTask> inboundTransfers = transfersBySource.remove(source);
                         if (inboundTransfers != null) {
                            for (InboundTransferTask inboundTransfer : inboundTransfers) {
-                              for (int segmentId : inboundTransfer.getSegments()) {
-                                 transfersBySegment.remove(segmentId);   //todo [anistor] what do we do with the locks and transactions for restarted segments?
-                                 addedSegments.add(segmentId);   // this segment will be restarted
-                              }
+                              // these segments will be restarted if they are still in new write CH
+                              transfersBySegment.keySet().removeAll(inboundTransfer.getSegments());
                            }
                         }
                      }
@@ -227,18 +229,14 @@ public class StateConsumerImpl implements StateConsumer {
             }
          }
       } finally {
-         synchronized (this) {
-            activeTopologyUpdates--;
-            if (activeTopologyUpdates == 0 && !isStateTransferInProgress()) {
-               notifyEndOfStateTransfer(cacheTopology.getTopologyId());
-            }
+         if (activeTopologyUpdates.decrementAndGet() == 0 && !isStateTransferInProgress()) {
+            notifyEndOfTopologyUpdate(cacheTopology.getTopologyId());
          }
       }
    }
 
-   private void notifyEndOfStateTransfer(int topologyId) {
-      if (rebalanceInProgress) {
-         rebalanceInProgress = false;
+   private void notifyEndOfTopologyUpdate(int topologyId) {
+      if (rebalanceInProgress.compareAndSet(true, false)) {
          localTopologyManager.confirmRebalance(cacheName, topologyId, null);
       }
    }
@@ -373,29 +371,27 @@ public class StateConsumerImpl implements StateConsumer {
       synchronized (this) {
          // already active transfers do not need to be added again
          segmentsToProcess.removeAll(transfersBySegment.keySet());
+      }
 
-         while (!segmentsToProcess.isEmpty()) {
-            Map<Address, Set<Integer>> segmentsBySource = new HashMap<Address, Set<Integer>>();
-            for (int segmentId : segmentsToProcess) {
-               if (transfersBySegment.containsKey(segmentId)) {
-                  throw new IllegalStateException("Cannot have more than one transfer for segment " + segmentId);
-               }
-
-               Address source = pickSourceOwner(segmentId, blacklistedSources);
-               if (source != null) {
-                  Set<Integer> segmentsFromSource = segmentsBySource.get(source);
-                  if (segmentsFromSource == null) {
-                     segmentsFromSource = new HashSet<Integer>();
-                     segmentsBySource.put(source, segmentsFromSource);
-                  }
-                  segmentsFromSource.add(segmentId);
-               }
-            }
-
-            Set<Integer> failedSegments = new HashSet<Integer>();
-            for (Address source : segmentsBySource.keySet()) {
+      while (!segmentsToProcess.isEmpty()) {
+         Map<Address, Set<Integer>> segmentsBySource = new HashMap<Address, Set<Integer>>();
+         for (int segmentId : segmentsToProcess) {
+            Address source = pickSourceOwner(segmentId, blacklistedSources);
+            if (source != null) {
                Set<Integer> segmentsFromSource = segmentsBySource.get(source);
-               InboundTransferTask inboundTransfer = new InboundTransferTask(segmentsFromSource, source, cacheTopology.getTopologyId(), this, rpcManager, commandsFactory, timeout);
+               if (segmentsFromSource == null) {
+                  segmentsFromSource = new HashSet<Integer>();
+                  segmentsBySource.put(source, segmentsFromSource);
+               }
+               segmentsFromSource.add(segmentId);
+            }
+         }
+
+         Set<Integer> failedSegments = new HashSet<Integer>();
+         for (Address source : segmentsBySource.keySet()) {
+            Set<Integer> segmentsFromSource = segmentsBySource.get(source);
+            InboundTransferTask inboundTransfer = new InboundTransferTask(segmentsFromSource, source, cacheTopology.getTopologyId(), this, rpcManager, commandsFactory, timeout);
+            synchronized (this) {
                for (int segmentId : segmentsFromSource) {
                   transfersBySegment.put(segmentId, inboundTransfer);
                }
@@ -405,28 +401,29 @@ public class StateConsumerImpl implements StateConsumer {
                   transfersBySource.put(inboundTransfer.getSource(), inboundTransfers);
                }
                inboundTransfers.add(inboundTransfer);
+            }
 
-               // if requesting the transactions fails we need to retry from another source
-               if (configuration.transaction().transactionMode().isTransactional()) {
-                  if (!inboundTransfer.requestTransactions()) {
-                     log.errorf("Failed to retrieve transactions for segments %s from node %s (node will be blacklisted)", segmentsFromSource, source);
-                     failedSegments.addAll(segmentsFromSource);
-                     blacklistedSources.add(source);
-                     removeTransfer(inboundTransfer);  // will be retried from another source
-                     continue;
-                  }
-               }
-
-               if (!inboundTransfer.requestSegments()) {
-                  log.errorf("Failed to request segments %s from node %s (node will be blacklisted)", segmentsFromSource, source);
+            // if requesting the transactions fails we need to retry from another source
+            if (configuration.transaction().transactionMode().isTransactional()) {
+               if (!inboundTransfer.requestTransactions()) {
+                  log.errorf("Failed to retrieve transactions for segments %s from node %s (node will be blacklisted)", segmentsFromSource, source);
                   failedSegments.addAll(segmentsFromSource);
                   blacklistedSources.add(source);
                   removeTransfer(inboundTransfer);  // will be retried from another source
+                  continue;
                }
             }
 
-            segmentsToProcess = failedSegments;
+            // if requesting the segments fails we need to retry from another source
+            if (!inboundTransfer.requestSegments()) {
+               log.errorf("Failed to request segments %s from node %s (node will be blacklisted)", segmentsFromSource, source);
+               failedSegments.addAll(segmentsFromSource);
+               blacklistedSources.add(source);
+               removeTransfer(inboundTransfer);  // will be retried from another source
+            }
          }
+
+         segmentsToProcess = failedSegments;
       }
    }
 
@@ -462,7 +459,7 @@ public class StateConsumerImpl implements StateConsumer {
                Set<Integer> cancelledSegments = new HashSet<Integer>(segmentsToCancel);
                cancelledSegments.retainAll(inboundTransfer.getSegments());
                segmentsToCancel.removeAll(cancelledSegments);
-               inboundTransfer.cancelSegments(cancelledSegments);
+               inboundTransfer.cancelSegments(cancelledSegments);   //this will also remove it from transfersBySource if the entire task gets cancelled
             }
          }
       }
@@ -505,7 +502,7 @@ public class StateConsumerImpl implements StateConsumer {
             log.failedToInvalidateKeys(e);
          }
       }
-      //todo [anistor] CacheNotifier.notifyDataRehashed
+      //todo [anistor] call CacheNotifier.notifyDataRehashed
    }
 
    private int getSegment(Object key) {
@@ -543,12 +540,8 @@ public class StateConsumerImpl implements StateConsumer {
    void onTaskCompletion(InboundTransferTask inboundTransfer) {
       removeTransfer(inboundTransfer);
 
-      boolean allTasksCompleted;
-      synchronized (this) {
-         allTasksCompleted = activeTopologyUpdates == 0 && !isStateTransferInProgress();
-      }
-      if (allTasksCompleted) {
-         notifyEndOfStateTransfer(cacheTopology.getTopologyId());
+      if (activeTopologyUpdates.get() == 0 && !isStateTransferInProgress()) {
+         notifyEndOfTopologyUpdate(cacheTopology.getTopologyId());
       }
    }
 }
