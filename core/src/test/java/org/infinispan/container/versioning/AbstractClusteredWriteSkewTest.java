@@ -140,6 +140,7 @@ public abstract class AbstractClusteredWriteSkewTest extends MultipleCacheManage
 
       @Override
       public Boolean call() throws InterruptedException {
+         int failuresCounter = 0;
          while (lastValue < counterMaxValue && !Thread.interrupted()) {
             boolean success = false;
             try {
@@ -157,10 +158,10 @@ public abstract class AbstractClusteredWriteSkewTest extends MultipleCacheManage
 
                unique = uniqueValuesSet.add(value);
                success = true;
-            } catch (WriteSkewException e) {
-               // expected exception
             } catch (Exception e) {
-               log.errorf(e, "Got the wrong type of exception: expected WriteSkewException, got %s", e);
+               // expected exception
+               failuresCounter++;
+               assertTrue(failuresCounter < 10 * counterMaxValue, "Too many failures incrementing the counter");
             } finally {
                if (!success) {
                   try {
