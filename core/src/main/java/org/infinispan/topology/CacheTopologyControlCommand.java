@@ -227,6 +227,7 @@ public class CacheTopologyControlCommand implements ReplicableCommand {
             ", topologyId=" + topologyId +
             ", currentCH=" + currentCH +
             ", pendingCH=" + pendingCH +
+            ", throwable=" + throwable +
             '}';
    }
 
