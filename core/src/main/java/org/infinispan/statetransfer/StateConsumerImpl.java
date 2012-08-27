@@ -195,6 +195,8 @@ public class StateConsumerImpl implements StateConsumer {
             removedSegments.removeAll(newSegments);
 
             // remove inbound transfers and any data for segments we no longer own
+            log.tracef("Discarding removed segments: %s; new segments: %s; old segments: %s",
+                  removedSegments, newSegments, previousSegments);
             discardSegments(removedSegments);
 
             if (fetchEnabled) {
