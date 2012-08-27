@@ -115,6 +115,9 @@ public class DefaultRebalancePolicy implements RebalancePolicy {
       }
    }
 
+   /**
+    * Should only be called while holding the cacheStatus lock
+    */
    private void updateConsistentHash(String cacheName, CacheStatus cacheStatus, CacheTopology cacheTopology) throws Exception {
       log.tracef("Updating cache %s topology: %s", cacheName, cacheTopology);
       cacheStatus.setCacheTopology(cacheTopology);
@@ -186,6 +189,8 @@ public class DefaultRebalancePolicy implements RebalancePolicy {
             // The list of "current" members will always be included in the set of "pending" members,
             // because leaves are reflected at the same time in both collections
             List<Address> newMembers = new ArrayList<Address>(clusterMembers);
+            newMembers.removeAll(leavers);
+
             ConsistentHash newPendingCH = null;
             if (pendingCH != null) {
                newMembers.retainAll(pendingCH.getMembers());
