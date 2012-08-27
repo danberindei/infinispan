@@ -157,9 +157,10 @@ public class DefaultRebalancePolicy implements RebalancePolicy {
                updateConsistentHash(cacheName, cacheStatus, cacheTopology);
             }
 
-            if (!cacheStatus.getJoiners().isEmpty()) {
-               // In rare cases we get the join request from a new node before JGroups has installed the new view
-               // If that happens, we ignore the joiner until the view containing it has been installed.
+            if (!isBalanced(cacheStatus.getCacheTopology().getCurrentCH()) || !cacheStatus.getJoiners().isEmpty()) {
+               // Rebalance after a leave.
+               // Also, in rare cases we get the join request from a new node before JGroups has installed the new view
+               // If that happens, we re-trigger the rebalance after the view containing it has been installed.
                triggerRebalance(cacheName, cacheStatus);
             }
          }
@@ -265,7 +266,7 @@ public class DefaultRebalancePolicy implements RebalancePolicy {
          ConsistentHash updatedMembersCH = chFactory.updateMembers(currentCH, newMembers);
          ConsistentHash balancedCH = chFactory.rebalance(updatedMembersCH);
          if (balancedCH.equals(currentCH)) {
-            log.tracef("The balanced CH is the same as the current CH, stopping rebalance");
+            log.tracef("The balanced CH is the same as the current CH, not rebalancing");
             return;
          }
          CacheTopology cacheTopology = new CacheTopology(newTopologyId, currentCH, balancedCH);
