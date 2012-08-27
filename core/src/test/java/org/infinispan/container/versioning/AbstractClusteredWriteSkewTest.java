@@ -26,6 +26,7 @@ import org.infinispan.configuration.cache.VersioningScheme;
 import org.infinispan.test.MultipleCacheManagersTest;
 import org.infinispan.test.fwk.TestCacheManagerFactory;
 import org.infinispan.transaction.LockingMode;
+import org.infinispan.transaction.WriteSkewException;
 import org.infinispan.util.concurrent.IsolationLevel;
 import org.testng.annotations.Test;
 
@@ -138,8 +139,9 @@ public abstract class AbstractClusteredWriteSkewTest extends MultipleCacheManage
       }
 
       @Override
-      public Boolean call() {
+      public Boolean call() throws InterruptedException {
          while (lastValue < counterMaxValue && !Thread.interrupted()) {
+            boolean success = false;
             try {
                //start transaction, get the counter value, increment and put it again
                //check for duplicates in case of success
@@ -154,16 +156,22 @@ public abstract class AbstractClusteredWriteSkewTest extends MultipleCacheManage
                transactionManager.commit();
 
                unique = uniqueValuesSet.add(value);
+               success = true;
+            } catch (WriteSkewException e) {
+               // expected exception
             } catch (Exception e) {
-               try {
-                  //lets rollback
-                  if (transactionManager.getStatus() != Status.STATUS_NO_TRANSACTION)
-                     transactionManager.rollback();
-               } catch (Throwable t) {
-                  //the only possible exception is thrown by the rollback. just ignore it
-                  log.trace("Exception during rollback", t);
-               }
+               log.errorf(e, "Got the wrong type of exception: expected WriteSkewException, got %s", e);
             } finally {
+               if (!success) {
+                  try {
+                     //lets rollback
+                     if (transactionManager.getStatus() != Status.STATUS_NO_TRANSACTION)
+                        transactionManager.rollback();
+                  } catch (Throwable t) {
+                     //the only possible exception is thrown by the rollback. just ignore it
+                     log.trace("Exception during rollback", t);
+                  }
+               }
                assertTrue(unique, "Duplicate value found in " + address(cache) + " (value=" + lastValue + ")");
             }
          }
