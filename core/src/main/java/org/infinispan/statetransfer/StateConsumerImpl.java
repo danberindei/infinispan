@@ -275,6 +275,7 @@ public class StateConsumerImpl implements StateConsumer {
 
       if (trace) {
          log.tracef("After applying the received state the data container has %d keys", dataContainer.size());
+         log.tracef("Segments not received yet: %s", transfersBySegment);
       }
    }
 
