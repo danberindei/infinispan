@@ -117,6 +117,10 @@ public class UnitTestTestNGListener implements ITestListener, IInvokedMethodList
    public void onStart(ITestContext arg0) {
       String fullName = arg0.getName();
       String simpleName = fullName.substring(fullName.lastIndexOf('.') + 1);
+      String classSimpleName = arg0.getCurrentXmlTest().getClasses().get(0).getSupportClass().getSimpleName();
+      if (!simpleName.equals(classSimpleName)) {
+         log.warnf("Wrong test name %s for class %s", simpleName, classSimpleName);
+      }
       TestCacheManagerFactory.testStarted(simpleName, fullName);
    }
 
