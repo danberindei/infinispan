@@ -108,6 +108,9 @@ public class ClusterTopologyManagerImpl implements ClusterTopologyManager {
 
    @Stop(priority = 100)
    public void stop() {
+      // stop blocking cache topology commands
+      viewId = Integer.MAX_VALUE;
+
       cacheManagerNotifier.removeListener(listener);
    }
 
@@ -164,8 +167,6 @@ public class ClusterTopologyManagerImpl implements ClusterTopologyManager {
 
    @Override
    public void handleLeave(String cacheName, Address leaver, int viewId) throws Exception {
-      waitForView(viewId);
-
       rebalancePolicy.updateMembersList(cacheName, Collections.<Address>emptyList(), Collections.singletonList(leaver));
    }
 
@@ -193,8 +194,10 @@ public class ClusterTopologyManagerImpl implements ClusterTopologyManager {
       if (this.viewId < viewId) {
          log.tracef("Received a cache topology command with a higher view id: %s, our view id is %s", viewId, this.viewId);
       }
-      while (this.viewId < viewId) {
-         Thread.sleep(100);
+      synchronized (viewUpdateLock) {
+         while (this.viewId < viewId) {
+            viewUpdateLock.wait(1000);
+         }
       }
    }
 
@@ -309,7 +312,8 @@ public class ClusterTopologyManagerImpl implements ClusterTopologyManager {
          }
 
          // update the view id last, so join requests from other nodes wait until we recovered existing members' info
-         this.viewId = newViewId;
+         viewId = newViewId;
+         viewUpdateLock.notifyAll();
       }
    }
 
