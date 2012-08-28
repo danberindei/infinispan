@@ -33,7 +33,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.infinispan.CacheException;
 import org.infinispan.commands.ReplicableCommand;
@@ -117,7 +116,8 @@ public class ClusterTopologyManagerImpl implements ClusterTopologyManager {
       log.debugf("Updating cluster-wide consistent hash for cache %s, topology = %s",
             cacheName, cacheTopology);
       ReplicableCommand command = new CacheTopologyControlCommand(cacheName,
-            CacheTopologyControlCommand.Type.CH_UPDATE, transport.getAddress(), cacheTopology);
+            CacheTopologyControlCommand.Type.CH_UPDATE, transport.getAddress(), cacheTopology,
+            transport.getViewId());
       executeOnClusterSync(command, getGlobalTimeout());
 
       RebalanceInfo rebalanceInfo = rebalanceStatusMap.get(cacheName);
@@ -148,29 +148,29 @@ public class ClusterTopologyManagerImpl implements ClusterTopologyManager {
                "in progress: " + existingRebalance);
       }
       ReplicableCommand command = new CacheTopologyControlCommand(cacheName,
-            CacheTopologyControlCommand.Type.REBALANCE_START, transport.getAddress(), cacheTopology);
+            CacheTopologyControlCommand.Type.REBALANCE_START, transport.getAddress(), cacheTopology,
+            transport.getViewId());
       executeOnClusterAsync(command);
    }
 
    @Override
-   public CacheTopology handleJoin(String cacheName, Address joiner, CacheJoinInfo joinInfo) throws Exception {
-//      while (viewId < joinInfo.getViewId()) {
-//         // TODO Hack to work around the coordinator receiving the view after the cache join request
-//         Thread.sleep(100);
-//      }
-//
+   public CacheTopology handleJoin(String cacheName, Address joiner, CacheJoinInfo joinInfo, int viewId) throws Exception {
+      waitForView(viewId);
+
       rebalancePolicy.initCache(cacheName, joinInfo);
       rebalancePolicy.updateMembersList(cacheName, Collections.singletonList(joiner), Collections.<Address>emptyList());
       return rebalancePolicy.getTopology(cacheName);
    }
 
    @Override
-   public void handleLeave(String cacheName, Address leaver) throws Exception {
+   public void handleLeave(String cacheName, Address leaver, int viewId) throws Exception {
+      waitForView(viewId);
+
       rebalancePolicy.updateMembersList(cacheName, Collections.<Address>emptyList(), Collections.singletonList(leaver));
    }
 
    @Override
-   public void handleRebalanceCompleted(String cacheName, Address node, int topologyId, Throwable throwable) throws Exception {
+   public void handleRebalanceCompleted(String cacheName, Address node, int topologyId, Throwable throwable, int viewId) throws Exception {
       if (throwable != null) {
          // TODO We could try to update the pending CH such that nodes reporting errors are not considered to hold any state
          // For now we are just logging the error and proceeding as if the rebalance was successful everywhere
@@ -186,6 +186,15 @@ public class ClusterTopologyManagerImpl implements ClusterTopologyManager {
 
       if (rebalanceInfo.confirmRebalance(node, topologyId)) {
          onClusterRebalanceCompleted(cacheName, topologyId, rebalanceInfo);
+      }
+   }
+
+   private void waitForView(int viewId) throws InterruptedException {
+      if (this.viewId < viewId) {
+         log.tracef("Received a cache topology command with a higher view id: %s, our view id is %s", viewId, this.viewId);
+      }
+      while (this.viewId < viewId) {
+         Thread.sleep(100);
       }
    }
 
@@ -307,7 +316,7 @@ public class ClusterTopologyManagerImpl implements ClusterTopologyManager {
    private HashMap<String, List<CacheTopology>> recoverClusterStatus() throws Exception {
       log.debugf("Recovering running caches in the cluster");
       ReplicableCommand command = new CacheTopologyControlCommand(null,
-         CacheTopologyControlCommand.Type.GET_STATUS, transport.getAddress());
+         CacheTopologyControlCommand.Type.GET_STATUS, transport.getAddress(), transport.getViewId());
       Map<Address, Object> statusResponses = executeOnClusterSync(command, getGlobalTimeout());
 
       HashMap<String, List<CacheTopology>> clusterCacheMap = new HashMap<String, List<CacheTopology>>();

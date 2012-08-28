@@ -36,7 +36,6 @@ public class CacheJoinInfo implements Serializable {
    private final int numSegments;
    private final int numOwners;
    private final long timeout;
-   private final int viewId;
 
    public CacheJoinInfo(ConsistentHashFactory consistentHashFactory, Hash hashFunction, int numSegments,
                         int numOwners, long timeout, int viewId) {
@@ -45,7 +44,6 @@ public class CacheJoinInfo implements Serializable {
       this.numSegments = numSegments;
       this.numOwners = numOwners;
       this.timeout = timeout;
-      this.viewId = viewId;
    }
 
    public ConsistentHashFactory getConsistentHashFactory() {
@@ -68,10 +66,6 @@ public class CacheJoinInfo implements Serializable {
       return timeout;
    }
 
-   public int getViewId() {
-      return viewId;
-   }
-
    @Override
    public String toString() {
       return "CacheJoinInfo{" +
@@ -79,7 +73,6 @@ public class CacheJoinInfo implements Serializable {
             ", hashFunction=" + hashFunction +
             ", numSegments=" + numSegments +
             ", numOwners=" + numOwners +
-            ", viewId=" + viewId +
             ", timeout=" + timeout +
             '}';
    }
