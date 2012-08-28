@@ -152,7 +152,7 @@ public class ClusterTopologyManagerImpl implements ClusterTopologyManager {
       }
       ReplicableCommand command = new CacheTopologyControlCommand(cacheName,
             CacheTopologyControlCommand.Type.REBALANCE_START, transport.getAddress(), cacheTopology,
-            transport.getViewId());
+            viewId);
       executeOnClusterAsync(command);
    }
 

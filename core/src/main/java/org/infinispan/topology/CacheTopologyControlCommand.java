@@ -206,7 +206,7 @@ public class CacheTopologyControlCommand implements ReplicableCommand {
    @Override
    public Object[] getParameters() {
       return new Object[]{cacheName, (byte) type.ordinal(), sender, joinInfo, topologyId, currentCH,
-            pendingCH, throwable};
+            pendingCH, throwable, viewId};
    }
 
    @Override
@@ -221,6 +221,7 @@ public class CacheTopologyControlCommand implements ReplicableCommand {
       currentCH = (ConsistentHash) parameters[i++];
       pendingCH = (ConsistentHash) parameters[i++];
       throwable = (Throwable) parameters[i++];
+      viewId = (Integer) parameters[i++];
    }
 
    @Override
