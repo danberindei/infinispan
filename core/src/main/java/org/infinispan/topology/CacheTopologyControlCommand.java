@@ -234,6 +234,7 @@ public class CacheTopologyControlCommand implements ReplicableCommand {
             ", currentCH=" + currentCH +
             ", pendingCH=" + pendingCH +
             ", throwable=" + throwable +
+            ", viewId=" + viewId +
             '}';
    }
 
