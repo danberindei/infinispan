@@ -179,6 +179,15 @@ public class StateTransferInterceptor extends CommandInterceptor {   //todo [ani
    }
 
    private Object handleTopologyAffectedCommand(InvocationContext ctx, TopologyAffectedCommand command) throws Throwable {
+
+      CacheTopology cacheTopology = stateTransferManager.getCacheTopology();
+      if (cacheTopology == null) { // possible e.g. when this is invoked in the scope of preload
+         if (stateTransferManager.isJoinComplete())
+            throw new IllegalStateException("Cannot have null cache topology for a cache that joined the cluster.");
+         return invokeNextInterceptor(ctx, command);
+      }
+
+
       if (ctx.hasFlag(Flag.CACHE_MODE_LOCAL)) {
          final boolean isTxCommand = command instanceof TransactionBoundaryCommand;
          try {
@@ -195,7 +204,6 @@ public class StateTransferInterceptor extends CommandInterceptor {   //todo [ani
 
       Set<Address> newTargets = null;
       stateTransferLock.commandsSharedLock();
-      CacheTopology cacheTopology = stateTransferManager.getCacheTopology();
       final int topologyId = cacheTopology.getTopologyId();
       final ConsistentHash readCh = cacheTopology.getReadConsistentHash();
       final ConsistentHash writeCh = cacheTopology.getWriteConsistentHash();
