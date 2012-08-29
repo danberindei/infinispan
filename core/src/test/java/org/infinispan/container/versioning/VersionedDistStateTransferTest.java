@@ -25,6 +25,8 @@ import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.configuration.cache.VersioningScheme;
 import org.infinispan.container.entries.InternalCacheEntry;
 import org.infinispan.distribution.MagicKey;
+import org.infinispan.distribution.ch.ConsistentHash;
+import org.infinispan.remoting.transport.Address;
 import org.infinispan.test.MultipleCacheManagersTest;
 import org.infinispan.test.fwk.CleanupAfterMethod;
 import org.infinispan.test.fwk.TestCacheManagerFactory;
@@ -123,7 +125,9 @@ public class VersionedDistStateTransferTest extends MultipleCacheManagersTest {
    }
 
    private void checkVersion(Cache<Object, Object> c, MagicKey hello) {
-      if (c.getAdvancedCache().getDistributionManager().isLocal(hello)) {
+      Address address = c.getCacheManager().getAddress();
+      ConsistentHash readConsistentHash = c.getAdvancedCache().getDistributionManager().getReadConsistentHash();
+      if (readConsistentHash.isKeyLocalToNode(address, hello)) {
          InternalCacheEntry ice = c.getAdvancedCache().getDataContainer().get(hello);
          assert ice != null;
          assert ice.getVersion() != null;
