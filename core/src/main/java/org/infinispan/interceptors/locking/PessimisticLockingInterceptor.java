@@ -109,8 +109,13 @@ public class PessimisticLockingInterceptor extends AbstractTxLockingInterceptor 
 
       final TxInvocationContext txContext = (TxInvocationContext) ctx;
       try {
-         final boolean localNodeOwnsLock = cdl.localNodeIsPrimaryOwner(command.getKey());
+
+         boolean localNodeOwnsLock = true;
+         if (!ctx.hasFlag(Flag.SKIP_OWNERSHIP_CHECK))
+            localNodeOwnsLock = cdl.localNodeIsPrimaryOwner(command.getKey());
+
          acquireRemoteIfNeeded(ctx, command.getKey(), localNodeOwnsLock);
+
          if (ctx.hasFlag(Flag.SKIP_OWNERSHIP_CHECK) || localNodeOwnsLock) {
             lockKeyAndCheckOwnership(ctx, command.getKey());
          } else if (cdl.localNodeIsOwner(command.getKey())) {
@@ -250,7 +255,7 @@ public class PessimisticLockingInterceptor extends AbstractTxLockingInterceptor 
    }
 
    private void acquireRemoteIfNeeded(InvocationContext ctx, Object key, boolean localNodeIsLockOwner) throws Throwable {
-      if (!localNodeIsLockOwner && ctx.isOriginLocal() && !ctx.hasFlag(Flag.CACHE_MODE_LOCAL)) {
+      if (ctx.isOriginLocal() && !ctx.hasFlag(Flag.CACHE_MODE_LOCAL) && !localNodeIsLockOwner) {
          final TxInvocationContext txContext = (TxInvocationContext) ctx;
          LocalTransaction localTransaction = (LocalTransaction) txContext.getCacheTransaction();
          final boolean alreadyLocked = localTransaction.getAffectedKeys().contains(key);

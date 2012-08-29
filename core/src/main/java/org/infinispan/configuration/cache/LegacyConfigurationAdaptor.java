@@ -69,13 +69,6 @@ public class LegacyConfigurationAdaptor {
                .useReplQueue(config.clustering().async().useReplQueue());
       }
       
-      if (config.clustering().hash().consistentHash() != null) {
-         legacy.clustering()
-            .hash()
-               .consistentHashClass(config.clustering().hash().consistentHash().getClass());
-      
-      }
-
       if (config.clustering().hash().hash() != null) {
          legacy.clustering()
             .hash()
@@ -85,7 +78,6 @@ public class LegacyConfigurationAdaptor {
       legacy.clustering()
          .hash()
             .numOwners(config.clustering().hash().numOwners())
-            .numVirtualNodes(config.clustering().hash().numVirtualNodes())
             .groups()
                .enabled(config.clustering().hash().groups().enabled())
                .groupers(config.clustering().hash().groups().groupers());
@@ -324,16 +316,13 @@ public class LegacyConfigurationAdaptor {
       }
 
       if (legacy.isCustomConsistentHashClass()) {
+         // We don't support custom consistent hash via hash.consistentHash any more, so this code is no longer called
          builder.clustering()
             .hash()
                .consistentHash(Util.<ConsistentHash>getInstance(legacy.getConsistentHashClass(), legacy.getClassLoader()));
-      
       }
-      if (legacy.isCustomHashFunctionClass()) {
-         builder.clustering()
-            .hash()
-               .hash(Util.<Hash>getInstance(legacy.getHashFunctionClass(), legacy.getClassLoader()));
-      }
+      // TODO This is just temporary, to help with the debugging of the test suite
+      builder.clustering().hash().numSegments(12);
 
       // Order is important here. First check whether state transfer itself
       // has been enabled and then check whether rehashing has been enabled,
@@ -348,7 +337,6 @@ public class LegacyConfigurationAdaptor {
          builder.clustering()
             .hash()
                .numOwners(legacy.getNumOwners())
-               .numVirtualNodes(legacy.getNumVirtualNodes())
                .rehashEnabled(legacy.isRehashEnabled())
                .rehashRpcTimeout(legacy.getRehashRpcTimeout())
                .rehashWait(legacy.getRehashWaitTime())

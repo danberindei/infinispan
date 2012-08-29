@@ -81,6 +81,7 @@ public enum Attribute {
     MODIFICTION_QUEUE_SIZE("modificationQueueSize"),
     NAME("name"),
     NUM_OWNERS("numOwners"),
+    NUM_SEGMENTS("numSegments"),
     NUM_RETRIES("numRetries"),
     NUM_VIRTUAL_NODES("numVirtualNodes"),
     ON_REHASH("onRehash"),

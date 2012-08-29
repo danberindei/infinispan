@@ -25,6 +25,8 @@ import org.infinispan.remoting.transport.Address
 import org.infinispan.server.core.transport.ExtendedChannelBuffer._
 import collection.JavaConversions._
 import org.infinispan.configuration.cache.Configuration
+import org.infinispan.distribution.ch.ConsistentHash
+import collection.mutable.ArrayBuffer
 
 /**
  * Version specific encoders are included here.
@@ -59,16 +61,46 @@ object Encoders {
                trace("Write hash distribution change response header %s", h)
                writeCommonHashTopologyHeader(buf, h.viewId, h.numOwners,
                                              h.hashFunction, h.hashSpace, members.size)
-               writeUnsignedInt(h.numVNodes, buf) // Num virtual nodes
-               mapAsScalaMap(members).foreach { case (addr, serverAddr) =>
-                  writeString(serverAddr.host, buf)
-                  writeUnsignedShort(serverAddr.port, buf)
-                  // Send the address' hash code as is
-                  // With virtual nodes off, clients will have to normalize it
-                  // With virtual nodes on, it's used as root to calculate
-                  // hash code and then normalize it
-                  buf.writeInt(if (h.hashFunction == 0) 0 else addr.hashCode())
+               writeUnsignedInt(1, buf) // Num virtual nodes
+
+               if (h.hashFunction == 0) {
+                  mapAsScalaMap(members).foreach { case (addr, serverAddr) =>
+                     writeString(serverAddr.host, buf)
+                     writeUnsignedShort(serverAddr.port, buf)
+                     // Send the address' hash code as is
+                     // With virtual nodes off, clients will have to normalize it
+                     // With virtual nodes on, it's used as root to calculate
+                     // hash code and then normalize it
+                     buf.writeInt(0)
+                  }
+                  return
                }
+
+               val cache = server.getCacheInstance(r.cacheName, members.getCacheManager, false)
+
+               // This is not quite correct, as the ownership of segments on the 1.0/1.1 clients is not exactly
+               // the same as on the server. But the difference appears only for (numSegment*numOwners/MAX_INT)
+               // of the keys (at the "segment borders"), so it's still much better than having no hash information.
+               // The idea here is to be able to be compatible with clients running version 1.0 of the protocol.
+               // With time, users should migrate to version 1.2 capable clients.
+               val distManager = cache.getAdvancedCache.getDistributionManager
+               val ch = distManager.getConsistentHash
+
+               val numSegments = ch.getNumSegments
+               val allDenormalizedHashIds = denormalizeSegmentHashIds(ch)
+               for (segmentIdx <- 0 until numSegments) {
+                  val denormalizedSegmentHashIds = allDenormalizedHashIds(segmentIdx)
+                  val segmentOwners = ch.locateOwnersForSegment(segmentIdx)
+                  for (ownerIdx <- 0 until h.numOwners) {
+                     val address = segmentOwners(ownerIdx % segmentOwners.size)
+                     val serverAddress = members(address)
+                     val hashId = denormalizedSegmentHashIds(ownerIdx)
+                     writeString(serverAddress.host, buf)
+                     writeUnsignedShort(serverAddress.port, buf)
+                     buf.writeInt(hashId)
+                  }
+               }
+
             }
             case t: TopologyAwareResponse => {
                trace("Return limited hash distribution aware header in spite of having a hash aware client %s", t)
@@ -85,7 +117,45 @@ object Encoders {
                "Expected version 1.1 specific response: " + topoResp)
          }
       }
-
    }
 
+   // "Denormalize" the segments - for each hash segment, find numOwners integer values that map on the hash wheel
+   // to the interval [segmentIdx*segmentSize, segmentIdx*segmentSize+leeway], leeway being hardcoded
+   // on the first line of the function
+   // TODO This relies on implementation details (segment layout) of DefaultConsistentHash, and won't work with any other CH
+   def denormalizeSegmentHashIds(ch: ConsistentHash): Array[ArrayBuffer[Int]] = {
+      // This is the fraction of keys we allow to have "wrong" owners. The algorithm below takes longer
+      // as this value decreases, and at some point it starts hanging (checked with an assert below)
+      val leewayFraction = 0.0002
+      val numOwners = ch.getNumOwners
+      val numSegments = ch.getNumSegments
+
+      val segmentSize = math.ceil(Integer.MAX_VALUE.toDouble / numSegments).toInt
+      val leeway = (leewayFraction * segmentSize).toInt
+      assert(leeway > 2 * numOwners, "numOwners is too big")
+      val denormalizedOwnerHashes = new Array[ArrayBuffer[Int]](numSegments)
+      for (i <- 0 until numSegments) {
+         denormalizedOwnerHashes(i) = new ArrayBuffer[Int](numOwners)
+      }
+      var segmentsLeft : Int = numSegments
+
+      var i = 0
+      while (segmentsLeft != 0) {
+         val normalizedHash = ch.getHashFunction.hash(i) & Integer.MAX_VALUE
+         if (normalizedHash % segmentSize < leeway) {
+            val segmentIdx = normalizedHash / segmentSize // DCH implementation detail
+            val segmentHashes = denormalizedOwnerHashes(segmentIdx)
+            if (segmentHashes.size < numOwners) {
+               segmentHashes += i
+               if (segmentHashes.size == numOwners) {
+                  segmentHashes.sortWith(_ < _)
+                  segmentsLeft -= 1
+               }
+            }
+         }
+         // Allows overflow, if we didn't find all segments in the 0..MAX_VALUE range
+         i += 1
+      }
+      return denormalizedOwnerHashes
+   }
 }

@@ -71,10 +71,10 @@ public class CacheManagerTest extends AbstractInfinispanTest {
       }
    }
 
-   public void testUnstartedCachemanager() throws Exception {
+   public void testUnstartedCachemanager() {
       withCacheManager(new CacheManagerCallable(new DefaultCacheManager(false)){
          @Override
-         public void call() throws Exception {
+         public void call() {
             assert cm.getStatus().equals(ComponentStatus.INSTANTIATED);
             assert !cm.getStatus().allowInvocations();
             Cache<Object, Object> cache = cm.getCache();
@@ -153,7 +153,6 @@ public class CacheManagerTest extends AbstractInfinispanTest {
       org.infinispan.config.Configuration c = new org.infinispan.config.Configuration();
       c.setL1CacheEnabled(false);
       c.setL1OnRehash(false);
-      c.fluent().hash().numVirtualNodes(48);
       c.setTransactionManagerLookup(new GenericTransactionManagerLookup());
       c.setIsolationLevel(IsolationLevel.NONE);
       org.infinispan.config.Configuration oneCacheConfiguration = cm.defineConfiguration("oneCache", c);
@@ -209,6 +208,42 @@ public class CacheManagerTest extends AbstractInfinispanTest {
       } finally {
          cm.stop();
       }
+   }
+
+   public void testGetCacheConfigurationAfterDefiningSameOldConfigurationTwice() {
+      withCacheManager(new CacheManagerCallable(TestCacheManagerFactory.createLocalCacheManager(false)) {
+         @Override
+         public void call() {
+            org.infinispan.config.Configuration c = new org.infinispan.config.Configuration();
+            c.setInvocationBatchingEnabled(false);
+            org.infinispan.config.Configuration newConfig = cm.defineConfiguration("new-cache", c);
+            assert !newConfig.isInvocationBatchingEnabled();
+
+            c = new org.infinispan.config.Configuration();
+            c.setInvocationBatchingEnabled(true);
+            org.infinispan.config.Configuration newConfig2 = cm.defineConfiguration("new-cache", c);
+            assert newConfig2.isInvocationBatchingEnabled();
+            assert cm.getCache("new-cache").getConfiguration().isInvocationBatchingEnabled();
+         }
+      });
+   }
+
+   public void testGetCacheConfigurationAfterDefiningSameNewConfigurationTwice() {
+      withCacheManager(new CacheManagerCallable(TestCacheManagerFactory.createLocalCacheManager(false)) {
+         @Override
+         public void call() {
+            ConfigurationBuilder builder = new ConfigurationBuilder();
+            builder.invocationBatching().disable();
+            Configuration newConfig = cm.defineConfiguration("new-cache", builder.build());
+            assert !newConfig.invocationBatching().enabled();
+
+            builder = new ConfigurationBuilder();
+            builder.invocationBatching().enable();
+            Configuration newConfig2 = cm.defineConfiguration("new-cache", builder.build());
+            assert newConfig2.invocationBatching().enabled();
+            assert cm.getCache("new-cache").getCacheConfiguration().invocationBatching().enabled();
+         }
+      });
    }
 
    public void testGetCacheNames() {
@@ -337,12 +372,12 @@ public class CacheManagerTest extends AbstractInfinispanTest {
       return TestCacheManagerFactory.createClusteredCacheManager(c);
    }
 
-   private void doTestRemoveCacheClustered(final Method m, final boolean isStoreShared) throws Exception {
+   private void doTestRemoveCacheClustered(final Method m, final boolean isStoreShared) {
       withCacheManagers(new MultiCacheManagerCallable(
             getManagerWithStore(m, true, isStoreShared, "store1-"),
             getManagerWithStore(m, true, isStoreShared, "store2-")) {
          @Override
-         public void call() throws Exception {
+         public void call() {
             EmbeddedCacheManager manager1 = cms[0];
             EmbeddedCacheManager manager2 = cms[0];
             Cache cache1 = manager1.getCache("cache", true);
