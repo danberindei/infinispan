@@ -39,7 +39,8 @@ import java.lang.reflect.Method;
  * @author Galder Zamarreño
  * @since 4.0
  */
-@Test(groups = "functional", testName = "statetransfer.StateTransferFetchOnlyPersistentStateTest")
+@Test(groups = "functional", testName = "statetransfer.StateTransferFetchOnlyPersistentStateTest",
+      enabled = false, description = "NBST doesn't allow yet fetching of persistent state only")
 public class StateTransferFetchOnlyPersistentStateTest extends MultipleCacheManagersTest {
 
    @Override
