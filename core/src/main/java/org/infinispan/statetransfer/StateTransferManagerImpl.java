@@ -23,6 +23,9 @@
 
 package org.infinispan.statetransfer;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 import org.infinispan.Cache;
 import org.infinispan.configuration.cache.CacheMode;
 import org.infinispan.configuration.cache.Configuration;
@@ -60,6 +63,8 @@ public class StateTransferManagerImpl implements StateTransferManager {
    private RpcManager rpcManager;
    private GroupManager groupManager;   // optional
    private LocalTopologyManager localTopologyManager;
+
+   private CountDownLatch initialStateTransferComplete = new CountDownLatch(1);
 
    public StateTransferManagerImpl() {
    }
@@ -170,12 +175,22 @@ public class StateTransferManagerImpl implements StateTransferManager {
       ConsistentHash oldCH = oldCacheTopology != null ? oldCacheTopology.getWriteConsistentHash() : null;
       ConsistentHash newCH = newCacheTopology.getWriteConsistentHash();
 
+      // TODO Improve notification to contain both CHs
       cacheNotifier.notifyTopologyChanged(oldCH, newCH, true);
 
       stateConsumer.onTopologyUpdate(newCacheTopology, isRebalance);
       stateProvider.onTopologyUpdate(newCacheTopology, isRebalance);
 
       cacheNotifier.notifyTopologyChanged(oldCH, newCH, false);
+
+      if (newCacheTopology.getCurrentCH().getMembers().contains(rpcManager.getAddress())) {
+         initialStateTransferComplete.countDown();
+      }
+   }
+
+   @Start(priority = 1000)
+   public void waitForInitialStateTransferToComplete() throws InterruptedException {
+      initialStateTransferComplete.await(configuration.clustering().stateTransfer().timeout(), TimeUnit.MILLISECONDS);
    }
 
    @Stop(priority = 20)
