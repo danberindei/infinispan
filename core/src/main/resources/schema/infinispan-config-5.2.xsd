@@ -923,7 +923,7 @@
                     </xs:documentation>
                   </xs:annotation>
                 </xs:attribute>
-                <xs:attribute name="consistentHashFactoryClass" type="xs:string">
+                <xs:attribute name="hashFunctionClass" type="xs:string">
                   <xs:annotation>
                     <xs:documentation>
                       The hash function used as a bit spreader and a general hash code generator. Must implement org.infinispan.commons.hash.Hash.
