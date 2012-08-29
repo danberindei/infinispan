@@ -112,6 +112,11 @@ public class DistributionManagerImpl implements DistributionManager {
    @Override
    public DataLocality getLocality(Object key) {
       boolean transferInProgress = stateTransferManager.isStateTransferInProgressForKey(key);
+
+      //this is the case e.g. during preload which happens before the state transfer
+      if (stateTransferManager.getCacheTopology() == null)
+         return DataLocality.LOCAL;
+
       boolean local = stateTransferManager.getCacheTopology().getWriteConsistentHash().isKeyLocalToNode(getAddress(), key);
 
       if (transferInProgress) {
