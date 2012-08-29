@@ -106,6 +106,7 @@ public class MissingRpcDispatcherTest extends MultipleCacheManagersTest {
       String jgroupsCfg = p.getProperty(JGroupsTransport.CONFIGURATION_STRING);
       try {
          JChannel channel = new JChannel(jgroupsCfg);
+         channel.setName(newGC.getTransportNodeName());
          channel.connect(newGC.getClusterName());
          return channel;
       } catch (Exception e) {
