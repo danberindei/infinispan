@@ -150,6 +150,7 @@ public class StateConsumerImpl implements StateConsumer {
    }
 
    public boolean isStateTransferInProgress() {
+      // TODO This is called quite often, use an extra volatile, a concurrent collection or a RWLock instead
       synchronized (this) {
          return !transfersBySource.isEmpty();
       }
@@ -277,7 +278,9 @@ public class StateConsumerImpl implements StateConsumer {
 
       if (trace) {
          log.tracef("After applying the received state the data container has %d keys", dataContainer.size());
-         log.tracef("Segments not received yet: %s", transfersBySegment);
+         synchronized (this) {
+            log.tracef("Segments not received yet: %s", transfersBySource);
+         }
       }
    }
 
