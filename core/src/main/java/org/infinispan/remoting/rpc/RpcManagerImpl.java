@@ -153,7 +153,7 @@ public class RpcManagerImpl implements RpcManager {
          long startTimeNanos = 0;
          if (statisticsEnabled) startTimeNanos = System.nanoTime();
          try {
-            // TODO Re-enabled
+            // TODO Re-enable the filter (and test MirrsingRpcDispatcherTest) after we find a way to update the cache members list before state transfer has started
             // add a response filter that will ensure we don't wait for replies from non-members
             // but only if the target is the whole cluster and the call is synchronous
             // if strict peer-to-peer is enabled we have to wait for replies from everyone, not just cache members
