@@ -90,4 +90,19 @@ public class VersionedPutKeyValueCommand extends PutKeyValueCommand {
       version = (EntryVersion) parameters[4];
       flags = (Set<Flag>) parameters[5];
    }
+
+   @Override
+   public String toString() {
+      return new StringBuilder()
+            .append("VersionedPutKeyValueCommand{key=")
+            .append(key)
+            .append(", value=").append(value)
+            .append(", version=").append(version)
+            .append(", flags=").append(flags)
+            .append(", putIfAbsent=").append(putIfAbsent)
+            .append(", lifespanMillis=").append(lifespanMillis)
+            .append(", maxIdleTimeMillis=").append(maxIdleTimeMillis)
+            .append("}")
+            .toString();
+   }
 }
