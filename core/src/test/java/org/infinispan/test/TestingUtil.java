@@ -189,7 +189,7 @@ public class TestingUtil {
                         rpcManager.getAddress(), Arrays.toString(addresses), cacheTopology.getCurrentCH().getMembers());
                } else {
                   message = String.format("Timed out waiting for rebalancing to complete on node %s, " +
-                        "current topology is %s", cacheTopology);
+                        "current topology is %s", c.getCacheManager().getAddress(), cacheTopology);
                }
                log.error(message);
                throw new RuntimeException(message);
