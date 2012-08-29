@@ -62,7 +62,7 @@ public class VersionedPutKeyValueCommand extends PutKeyValueCommand {
       // Apply the version to the entry
       MVCCEntry e = (MVCCEntry) ctx.lookupEntry(key);
       Object entryValue = e.getValue();
-      if ((entryValue == null || !putIfAbsent || e.isRemoved()) && !(value instanceof Delta)) {
+      if (!(value instanceof Delta)) {
          e.setVersion(version);
       }
 
