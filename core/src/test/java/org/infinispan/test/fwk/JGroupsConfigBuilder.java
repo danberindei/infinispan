@@ -158,9 +158,7 @@ public class JGroupsConfigBuilder {
     * protocols from the given JGroups TCP stack.
     */
    private static void removeFailureDetectionTcp(JGroupsProtocolCfg jgroupsCfg) {
-      jgroupsCfg.removeProtocol(FD)
-            .removeProtocol(FD_SOCK)
-            .removeProtocol(VERIFY_SUSPECT);
+      jgroupsCfg.removeProtocol(FD);
    }
 
    private static void removeRela2(JGroupsProtocolCfg jgroupsCfg) {
