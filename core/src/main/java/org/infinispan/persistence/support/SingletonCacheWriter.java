@@ -1,10 +1,11 @@
 package org.infinispan.persistence.support;
 
 import org.infinispan.Cache;
+import org.infinispan.commons.executors.DefaultWorkerThreadFactory;
+import org.infinispan.configuration.cache.Configurations;
 import org.infinispan.configuration.cache.SingletonStoreConfiguration;
 import org.infinispan.container.DataContainer;
 import org.infinispan.container.entries.InternalCacheEntry;
-import org.infinispan.marshall.core.MarshalledEntryImpl;
 import org.infinispan.persistence.spi.CacheWriter;
 import org.infinispan.marshall.core.MarshalledEntry;
 import org.infinispan.manager.EmbeddedCacheManager;
@@ -13,6 +14,7 @@ import org.infinispan.notifications.cachemanagerlistener.annotation.CacheStarted
 import org.infinispan.notifications.cachemanagerlistener.annotation.ViewChanged;
 import org.infinispan.notifications.cachemanagerlistener.event.Event;
 import org.infinispan.notifications.cachemanagerlistener.event.ViewChangedEvent;
+import org.infinispan.persistence.spi.InitializationContext;
 import org.infinispan.remoting.transport.Address;
 import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
@@ -24,7 +26,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -83,16 +84,23 @@ public class SingletonCacheWriter extends DelegatingCacheWriter {
     */
    protected volatile boolean active;
 
+   /**
+    * Context classloader for the worker threads.
+    */
+   private ClassLoader classLoader;
+
 
    public SingletonCacheWriter(CacheWriter actual, SingletonStoreConfiguration singletonConfiguration) {
       super(actual);
-      executor = Executors.newSingleThreadExecutor(new ThreadFactory() {
-         @Override
-         public Thread newThread(Runnable r) {
-            return new Thread(r, THREAD_NAME);
-         }
-      });
+      executor = Executors.newSingleThreadExecutor(new DefaultWorkerThreadFactory(THREAD_NAME, classLoader));
       this.singletonConfiguration = singletonConfiguration;
+   }
+
+   @Override
+   public void init(InitializationContext ctx) {
+      super.init(ctx);
+      classLoader = Configurations.getClassLoader(ctx.getCache().getCacheConfiguration(),
+            ctx.getCache().getCacheManager().getCacheManagerConfiguration());
    }
 
    @Override

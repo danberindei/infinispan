@@ -3,8 +3,10 @@ package org.infinispan.persistence.async;
 import net.jcip.annotations.GuardedBy;
 
 import org.infinispan.Cache;
+import org.infinispan.commons.executors.DefaultWorkerThreadFactory;
 import org.infinispan.configuration.cache.AsyncStoreConfiguration;
 import org.infinispan.configuration.cache.Configuration;
+import org.infinispan.configuration.cache.Configurations;
 import org.infinispan.persistence.spi.PersistenceException;
 import org.infinispan.persistence.modifications.Modification;
 import org.infinispan.persistence.modifications.Remove;
@@ -72,6 +74,7 @@ public class AsyncCacheWriter extends DelegatingCacheWriter {
    protected final AtomicReference<State> state = new AtomicReference<State>();
 
    protected AsyncStoreConfiguration asyncConfiguration;
+   private ClassLoader classLoader;
 
    public AsyncCacheWriter(CacheWriter delegate) {
       super(delegate);
@@ -97,6 +100,9 @@ public class AsyncCacheWriter extends DelegatingCacheWriter {
       } else {
          shutdownTimeout = configuredAsyncStopTimeout;
       }
+
+      classLoader = Configurations.getClassLoader(cache.getCacheConfiguration(),
+            cache.getCacheManager().getCacheManagerConfiguration());
    }
 
    @Override
@@ -106,15 +112,9 @@ public class AsyncCacheWriter extends DelegatingCacheWriter {
       stateLock = new BufferLock(asyncConfiguration.modificationQueueSize());
 
       int poolSize = asyncConfiguration.threadPoolSize();
+      ThreadFactory threadFactory = new DefaultWorkerThreadFactory("AsyncStoreProcessor-" + cacheName + "-", threadId, "", classLoader);
       executor = new ThreadPoolExecutor(0, poolSize, 120L, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(),
-                                        new ThreadFactory() {
-                                           @Override
-                                           public Thread newThread(Runnable r) {
-                                              Thread t = new Thread(r, "AsyncStoreProcessor-" + cacheName + "-" + threadId.getAndIncrement());
-                                              t.setDaemon(true);
-                                              return t;
-                                           }
-                                        });
+            threadFactory);
       coordinator = new Thread(new AsyncStoreCoordinator(), "AsyncStoreCoordinator-" + cacheName);
       coordinator.setDaemon(true);
       coordinator.start();

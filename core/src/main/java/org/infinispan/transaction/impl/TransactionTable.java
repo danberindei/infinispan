@@ -8,12 +8,14 @@ import org.infinispan.commands.write.WriteCommand;
 import org.infinispan.commons.CacheException;
 import org.infinispan.commons.equivalence.AnyEquivalence;
 import org.infinispan.commons.equivalence.IdentityEquivalence;
+import org.infinispan.commons.executors.DefaultWorkerThreadFactory;
 import org.infinispan.commons.util.CollectionFactory;
 import org.infinispan.commons.util.InfinispanCollections;
 import org.infinispan.commons.util.Util;
 import org.infinispan.commons.util.concurrent.jdk8backported.EquivalentConcurrentHashMapV8;
 import org.infinispan.configuration.cache.Configuration;
 import org.infinispan.configuration.cache.Configurations;
+import org.infinispan.configuration.global.GlobalConfiguration;
 import org.infinispan.context.InvocationContextFactory;
 import org.infinispan.factories.annotations.Inject;
 import org.infinispan.factories.annotations.Start;
@@ -101,6 +103,8 @@ public class TransactionTable implements org.infinispan.transaction.TransactionT
    private String cacheName;
    private TimeService timeService;
    private CacheManagerNotifier cacheManagerNotifier;
+   private boolean totalOrder;
+   private ClassLoader classLoader;
 
    @Inject
    public void initialize(RpcManager rpcManager, Configuration configuration,
@@ -108,7 +112,7 @@ public class TransactionTable implements org.infinispan.transaction.TransactionT
                           TransactionFactory gtf, TransactionCoordinator txCoordinator,
                           TransactionSynchronizationRegistry transactionSynchronizationRegistry,
                           CommandsFactory commandsFactory, ClusteringDependentLogic clusteringDependentLogic, Cache cache,
-                          TimeService timeService, CacheManagerNotifier cacheManagerNotifier) {
+                          TimeService timeService, GlobalConfiguration globalConfiguration, CacheManagerNotifier cacheManagerNotifier) {
       this.rpcManager = rpcManager;
       this.configuration = configuration;
       this.icf = icf;
@@ -122,6 +126,7 @@ public class TransactionTable implements org.infinispan.transaction.TransactionT
       this.cacheManagerNotifier = cacheManagerNotifier;
       this.cacheName = cache.getName();
       this.timeService = timeService;
+      this.classLoader = globalConfiguration.classLoader();
 
       this.clustered = configuration.clustering().cacheMode().isClustered();
    }
@@ -142,15 +147,8 @@ public class TransactionTable implements org.infinispan.transaction.TransactionT
          minTopologyRecalculationLock = new ReentrantLock();
          remoteTransactions = CollectionFactory.makeConcurrentMap(concurrencyLevel, 0.75f, concurrencyLevel);
 
-         ThreadFactory tf = new ThreadFactory() {
-            @Override
-            public Thread newThread(Runnable r) {
-               String address = rpcManager != null ? rpcManager.getTransport().getAddress().toString() : "local";
-               Thread th = new Thread(r, "TxCleanupService," + cacheName + "," + address);
-               th.setDaemon(true);
-               return th;
-            }
-         };
+         String address = rpcManager != null ? rpcManager.getTransport().getAddress().toString() : "local";
+         ThreadFactory tf = new DefaultWorkerThreadFactory("TxCleanupService," + cacheName + "," + address, null, classLoader);
          executorService = Executors.newSingleThreadScheduledExecutor(tf);
 
          notifier.addListener(this);

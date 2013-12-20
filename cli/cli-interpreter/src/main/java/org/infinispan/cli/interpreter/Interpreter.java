@@ -27,6 +27,8 @@ import org.infinispan.cli.interpreter.session.Session;
 import org.infinispan.cli.interpreter.session.SessionImpl;
 import org.infinispan.cli.interpreter.statement.Statement;
 import org.infinispan.commons.api.BasicCacheContainer;
+import org.infinispan.commons.executors.DefaultWorkerThreadFactory;
+import org.infinispan.configuration.cache.Configurations;
 import org.infinispan.factories.annotations.Inject;
 import org.infinispan.factories.annotations.Start;
 import org.infinispan.factories.annotations.Stop;
@@ -68,12 +70,9 @@ public class Interpreter {
 
    @Start
    public void start() {
-      this.executor = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
-         @Override
-         public Thread newThread(final Runnable r) {
-            return new Thread(r, "Interpreter");
-         }
-      });
+      ClassLoader classLoader = Configurations.getClassLoader(null, cacheManager.getCacheManagerConfiguration());
+         ThreadFactory threadFactory = new DefaultWorkerThreadFactory("Interpreter", null, classLoader);
+      this.executor = Executors.newSingleThreadScheduledExecutor(threadFactory);
       sessionReaperTask = executor.scheduleWithFixedDelay(new ScheduledTask(), sessionReaperWakeupInterval, sessionReaperWakeupInterval, TimeUnit.MILLISECONDS);
    }
 

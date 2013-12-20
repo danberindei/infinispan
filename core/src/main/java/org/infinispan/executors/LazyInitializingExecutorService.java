@@ -1,5 +1,6 @@
 package org.infinispan.executors;
 
+import org.infinispan.commons.executors.AdvancedExecutorFactory;
 import org.infinispan.commons.util.InfinispanCollections;
 import org.infinispan.commons.executors.ThreadPoolExecutorFactory;
 
@@ -36,7 +37,11 @@ public final class LazyInitializingExecutorService implements ExecutorService {
       if (delegate == null) {
          synchronized (this) {
             if (delegate == null) {
-               delegate = executorFactory.createExecutor(threadFactory);
+               if (executorFactory instanceof AdvancedExecutorFactory) {
+                  delegate = ((AdvancedExecutorFactory)executorFactory).getExecutor(executorProperties, classLoader);
+               } else {
+                  delegate = executorFactory.getExecutor(executorProperties);
+               }
             }
          }
       }
