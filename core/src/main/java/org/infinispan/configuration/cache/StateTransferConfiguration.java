@@ -96,6 +96,14 @@ public class StateTransferConfiguration {
       return attributes;
    }
 
+   /**
+    * If true, ignore the preloaded entries and purge the cache stores when starting up
+    * and the node is not the only one in the cluster.
+    */
+   public boolean purgeOnJoin() {
+      return purgeOnJoin;
+   }
+
    @Override
    public String toString() {
       return this.getClass().getSimpleName() + attributes;
@@ -125,5 +133,4 @@ public class StateTransferConfiguration {
       result = prime * result + ((attributes == null) ? 0 : attributes.hashCode());
       return result;
    }
-
 }

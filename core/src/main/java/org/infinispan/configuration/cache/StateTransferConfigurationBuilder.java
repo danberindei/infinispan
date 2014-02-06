@@ -20,6 +20,13 @@ public class StateTransferConfigurationBuilder extends
       AbstractClusteringConfigurationChildBuilder implements Builder<StateTransferConfiguration> {
    private final AttributeSet attributes;
 
+   private static final Log log = LogFactory.getLog(StateTransferConfigurationBuilder.class);
+
+   private Boolean fetchInMemoryState = null;
+   private Boolean awaitInitialTransfer = null;
+   private int chunkSize = 512;
+   private long timeout = TimeUnit.MINUTES.toMillis(4);
+
    StateTransferConfigurationBuilder(ClusteringConfigurationBuilder builder) {
       super(builder);
       attributes = StateTransferConfiguration.attributeDefinitionSet();
@@ -77,6 +84,15 @@ public class StateTransferConfigurationBuilder extends
       return timeout(unit.toMillis(l));
    }
 
+   /**
+    * If true, ignore the preloaded entries and purge the cache stores when starting up
+    * and the node is not the only one in the cluster.
+    */
+   public StateTransferConfigurationBuilder purgeOnJoin(boolean enabled) {
+      this.purgeOnJoin = enabled;
+      return this;
+   }
+
    @Override
    public void validate() {
       if (attributes.attribute(CHUNK_SIZE).get() <= 0) {
@@ -96,7 +112,32 @@ public class StateTransferConfigurationBuilder extends
 
    @Override
    public  StateTransferConfiguration create() {
-      return new StateTransferConfiguration(attributes.protect());
+      // If replicated or distributed and fetch state transfer was not explicitly
+      // disabled, then force enabling of state transfer
+      CacheMode cacheMode = getClusteringBuilder().cacheMode();
+      boolean _fetchInMemoryState;
+      if (fetchInMemoryState != null) {
+         _fetchInMemoryState = fetchInMemoryState;
+      } else if (cacheMode.isReplicated() || cacheMode.isDistributed()) {
+         log.trace("Cache is distributed or replicated but state transfer was not defined, enabling it by default");
+         _fetchInMemoryState = true;
+      } else {
+         _fetchInMemoryState = false;
+      }
+
+      // If replicated or distributed and awaitInitialTransfer was not explicitly disabled,
+      // then enable it by default
+      boolean _awaitInitialTransfer;
+      if (awaitInitialTransfer != null) {
+         _awaitInitialTransfer = awaitInitialTransfer;
+      } else if (cacheMode.isClustered()) {
+         log.trace("Cache is distributed or replicated but awaitInitialTransfer was not defined, enabling it by default");
+         _awaitInitialTransfer = true;
+      } else {
+         _awaitInitialTransfer = false;
+      }
+      return new StateTransferConfiguration(_fetchInMemoryState, fetchInMemoryState,
+            timeout, chunkSize, _awaitInitialTransfer, awaitInitialTransfer);
    }
 
    @Override

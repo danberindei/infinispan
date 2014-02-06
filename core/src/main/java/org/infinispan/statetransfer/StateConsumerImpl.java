@@ -299,6 +299,15 @@ public class StateConsumerImpl implements StateConsumer {
       remoteCommandsExecutor.checkForReadyTasks();
 
       try {
+         boolean purgeOnJoin = configuration.clustering().stateTransfer().purgeOnJoin();
+         boolean wasMember = previousWriteCh != null && previousWriteCh.getMembers().contains(rpcManager.getAddress());
+         if (isRebalance && isMember && !wasMember && purgeOnJoin) {
+            // We just joined, but we may have some stale entries in our cache store
+            // and in memory, if preloading is enabled.
+            persistenceManager.clearAllStores(PersistenceManager.AccessMode.PRIVATE);
+            dataContainer.clear();
+         }
+
          // fetch transactions and data segments from other owners if this is enabled
          if (isTransactional || isFetchEnabled) {
             Set<Integer> addedSegments;
@@ -396,28 +405,6 @@ public class StateConsumerImpl implements StateConsumer {
          // and after notifyTransactionDataReceived - otherwise the RollbackCommands would block.
          if (transactionTable != null) {
             transactionTable.cleanupLeaverTransactions(rpcManager.getTransport().getMembers());
-         }
-
-         // Any data for segments we do not own should be removed from data container and cache store
-         // We need to discard data from all segments we don't own, not just those we previously owned,
-         // when we lose membership (e.g. because there was a merge, the local partition was in degraded mode
-         // and the other partition was available) or when L1 is enabled.
-         Set<Integer> removedSegments;
-         boolean wasMember = previousWriteCh != null ? previousWriteCh.getMembers().contains(rpcManager.getAddress()) : false;
-         if (isMember || (!isMember && wasMember)) {
-            removedSegments = new HashSet<>(newWriteCh.getNumSegments());
-            for (int i = 0; i < newWriteCh.getNumSegments(); i++) {
-               removedSegments.add(i);
-            }
-            Set<Integer> newSegments = getOwnedSegments(newWriteCh);
-            removedSegments.removeAll(newSegments);
-
-            try {
-               removeStaleData(removedSegments);
-            } catch (InterruptedException e) {
-               Thread.currentThread().interrupt();
-               throw new CacheException(e);
-            }
          }
       }
    }
