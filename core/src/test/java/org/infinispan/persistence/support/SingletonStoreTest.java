@@ -30,6 +30,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertTrue;
 import static org.testng.AssertJUnit.fail;
 
 @Test(groups = "unstable", testName = "persistence.decorators.SingletonStoreTest", description = "See ISPN-1123 -- original group: functional")
@@ -205,8 +206,10 @@ public class SingletonStoreTest extends MultipleCacheManagersTest {
    public void testAvoidConcurrentStatePush() throws Exception {
       final CountDownLatch pushStateCanFinish = new CountDownLatch(1);
       final CountDownLatch secondActiveStatusChangerCanStart = new CountDownLatch(1);
+      CountDownLatch pushStateFinished = new CountDownLatch(1);
       SingletonStoreConfiguration singletonConfig = createSingletonStoreConfiguration();
-      final TestingSingletonStore mscl = new TestingSingletonStore(pushStateCanFinish, secondActiveStatusChangerCanStart, singletonConfig);
+      final TestingSingletonStore mscl = new TestingSingletonStore(pushStateCanFinish, secondActiveStatusChangerCanStart,
+            pushStateFinished, singletonConfig);
 
       Future f1 = fork(createActiveStatusChanger(mscl));
       assert secondActiveStatusChangerCanStart.await(1000, TimeUnit.MILLISECONDS) : "Failed waiting on latch";
@@ -215,6 +218,9 @@ public class SingletonStoreTest extends MultipleCacheManagersTest {
 
       f1.get();
       f2.get();
+
+      boolean finished = pushStateFinished.await(10, TimeUnit.SECONDS);
+      assertTrue(finished);
 
       assertEquals(1, mscl.getNumberCreatedTasks());
    }
@@ -228,9 +234,10 @@ public class SingletonStoreTest extends MultipleCacheManagersTest {
 
    public void testPushStateTimedOut() throws Throwable {
       final CountDownLatch pushStateCanFinish = new CountDownLatch(1);
+      CountDownLatch pushStateFinished = new CountDownLatch(1);
 
       SingletonStoreConfiguration singletonConfig = createSingletonStoreConfiguration();
-      final TestingSingletonStore mscl = new TestingSingletonStore(pushStateCanFinish, null, singletonConfig);
+      final TestingSingletonStore mscl = new TestingSingletonStore(pushStateCanFinish, null, pushStateFinished, singletonConfig);
 
       Future f = fork(createActiveStatusChanger(mscl));
       pushStateCanFinish.await(200, TimeUnit.MILLISECONDS);
@@ -248,6 +255,9 @@ public class SingletonStoreTest extends MultipleCacheManagersTest {
             throw e;
          }
       }
+
+      boolean finished = pushStateFinished.await(10, TimeUnit.SECONDS);
+      assertTrue(finished);
    }
 
    private void waitForPushStateCompletion(Future pushThreadFuture) throws Exception {
@@ -262,12 +272,14 @@ public class SingletonStoreTest extends MultipleCacheManagersTest {
       private int numberCreatedTasks = 0;
       private CountDownLatch pushStateCanFinish;
       private CountDownLatch secondActiveStatusChangerCanStart;
+      private CountDownLatch pushStateFinished;
 
       public TestingSingletonStore(CountDownLatch pushStateCanFinish, CountDownLatch secondActiveStatusChangerCanStart,
-                                   SingletonStoreConfiguration singletonConfig) {
+                                   CountDownLatch pushStateFinished, SingletonStoreConfiguration singletonConfig) {
          super(null, singletonConfig);
          this.pushStateCanFinish = pushStateCanFinish;
          this.secondActiveStatusChangerCanStart = secondActiveStatusChangerCanStart;
+         this.pushStateFinished = pushStateFinished;
       }
 
       public int getNumberCreatedTasks() {
