@@ -1,97 +1,68 @@
 package org.infinispan.executors;
 
+import net.jcip.annotations.GuardedBy;
+
 import java.util.concurrent.Callable;
-import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Exectues given tasks in provided executor.
+ * Executes given tasks in provided executor.
  *
  * @author Radim Vansa &lt;rvansa@redhat.com&gt;
+ * @author Dan Berindei
  */
-public class ExecutorAllCompletionService implements CompletionService<Void> {
-   private ExecutorCompletionService executorService;
-   private AtomicReference<ExecutionException> firstException = new AtomicReference<ExecutionException>();
-   private AtomicLong scheduled = new AtomicLong();
-   private AtomicLong completed = new AtomicLong();
+public class ExecutorAllCompletionService<V> {
+   private final Lock completedLock = new ReentrantLock();
+   private final Condition completedCondition = completedLock.newCondition();
+   private Executor executor;
+   private AtomicReference<Throwable> firstException = new AtomicReference<Throwable>();
+   private AtomicInteger scheduled = new AtomicInteger();
+   @GuardedBy("completedLock")
+   private volatile int completed = 0;
 
    public ExecutorAllCompletionService(Executor executor) {
-      this.executorService = new ExecutorCompletionService(executor);
+      this.executor = executor;
    }
 
-   @Override
-   public Future<Void> submit(final Callable<Void> task) {
+   public Future<V> submit(final Callable<V> task) {
       scheduled.incrementAndGet();
-      Future<Void> future = executorService.submit(task);
-      pollUntilEmpty();
-      return future;
+      CustomFutureTask<V> futureTask = new CustomFutureTask<V>(task);
+      executor.execute(futureTask);
+      return futureTask;
    }
 
-   @Override
-   public Future<Void> submit(final Runnable task, Void result) {
+   public Future<V> submit(final Runnable task, V result) {
       scheduled.incrementAndGet();
-      Future<Void> future = executorService.submit(task, result);
-      pollUntilEmpty();
-      return future;
-   }
-
-   private void pollUntilEmpty() {
-      Future<Void> completedFuture;
-      while ((completedFuture = executorService.poll()) != null) {
-         try {
-            completedFuture.get();
-         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-         } catch (ExecutionException e) {
-            if (firstException.get() == null) {
-               firstException.compareAndSet(null, e);
-            }
-         } finally {
-            completed.incrementAndGet();
-         }
-      }
+      CustomFutureTask<V> futureTask = new CustomFutureTask<V>(task, result);
+      executor.execute(futureTask);
+      return futureTask;
    }
 
    /**
     * @return True if all currently scheduled tasks have already been completed, false otherwise;
     */
    public boolean isAllCompleted() {
-      pollUntilEmpty();
-      return completed.get() >= scheduled.get();
+      return completed >= scheduled.get();
    }
 
-   public long getScheduledTasks() {
-      return scheduled.get();
-   }
+   public void waitUntilAllCompleted() throws InterruptedException {
+      if (isAllCompleted())
+         return;
 
-   public long getCompletedTasks() {
-      return completed.get();
-   }
-
-   public void waitUntilAllCompleted() {
-      while (completed.get() < scheduled.get()) {
-         // Here is a race - if we poll the last scheduled entry elsewhere, we may wait
-         // another 100 ms until we realize that everything has already completed.
-         // Nevertheless, that's not so bad.
-         try {
-            Future<Void> future = poll(100, TimeUnit.MILLISECONDS);
-            if (future != null) {
-               future.get();
-            }
-         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return;
-         } catch (ExecutionException e) {
-            if (firstException.get() == null) {
-               firstException.compareAndSet(null, e);
-            }
+      completedLock.lock();
+      try {
+         while (completed < scheduled.get()) {
+            completedCondition.await();
          }
+      } finally {
+         completedLock.unlock();
       }
    }
 
@@ -100,31 +71,35 @@ public class ExecutorAllCompletionService implements CompletionService<Void> {
    }
 
    public ExecutionException getFirstException() {
-      return firstException.get();
+      return new ExecutionException(firstException.get());
    }
 
-   @Override
-   public Future<Void> take() throws InterruptedException {
-      Future<Void> future = executorService.take();
-      completed.incrementAndGet();
-      return future;
-   }
-
-   @Override
-   public Future<Void> poll() {
-      Future<Void> future = executorService.poll();
-      if (future != null) {
-         completed.incrementAndGet();
+   private class CustomFutureTask<V> extends java.util.concurrent.FutureTask<V> {
+      public CustomFutureTask(Callable<V> task) {
+         super(task);
       }
-      return future;
-   }
 
-   @Override
-   public Future<Void> poll(long timeout, TimeUnit unit) throws InterruptedException {
-      Future<Void> future = executorService.poll(timeout, unit);
-      if (future != null) {
-         completed.incrementAndGet();
+      public CustomFutureTask(Runnable task, V result) {
+         super(task, result);
       }
-      return future;
+
+      @Override
+      protected void done() {
+         completedLock.lock();
+         try {
+            completed++;
+            if (completed >= scheduled.get()) {
+               completedCondition.signalAll();
+            }
+         } finally {
+            completedLock.unlock();
+         }
+      }
+
+      @Override
+      protected void setException(Throwable t) {
+         firstException.compareAndSet(null, t);
+         super.setException(t);
+      }
    }
 }

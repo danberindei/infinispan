@@ -299,7 +299,7 @@ public class RestStore implements AdvancedLoadWriteStore {
       }
    }
 
-   private void submitProcessTask(final CacheLoaderTask cacheLoaderTask, CompletionService ecs,
+   private void submitProcessTask(final CacheLoaderTask cacheLoaderTask, ExecutorAllCompletionService ecs,
                                   final TaskContext taskContext, final Set<Object> batch, final boolean loadEntry,
                                   final boolean loadMetadata) {
       ecs.submit(new Callable<Void>() {

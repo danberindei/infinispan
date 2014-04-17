@@ -326,7 +326,7 @@ public class LevelDBStore implements AdvancedLoadWriteStore {
    }
 
    @SuppressWarnings("unchecked")
-   private void submitProcessTask(final CacheLoaderTask cacheLoaderTask, final KeyFilter filter, CompletionService ecs,
+   private void submitProcessTask(final CacheLoaderTask cacheLoaderTask, final KeyFilter filter, ExecutorAllCompletionService ecs,
                                   final TaskContext taskContext, final List<Map.Entry<byte[], byte[]>> batch,
                                   final boolean loadValues, final boolean loadMetadata) {
       ecs.submit(new Callable<Void>() {

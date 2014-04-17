@@ -568,7 +568,12 @@ public class JpaStore implements AdvancedLoadWriteStore {
       } finally {
          emStream.close();
       }
-      eacs.waitUntilAllCompleted();
+      try {
+         eacs.waitUntilAllCompleted();
+      } catch (InterruptedException e) {
+         Thread.currentThread().interrupt();
+         throw new org.infinispan.persistence.spi.PersistenceException(e);
+      }
       if (eacs.isExceptionThrown()) {
          throw new org.infinispan.persistence.spi.PersistenceException("Execution exception!", eacs.getFirstException());
       }
@@ -655,7 +660,12 @@ public class JpaStore implements AdvancedLoadWriteStore {
       } finally {
          emStream.close();
       }
-      eacs.waitUntilAllCompleted();
+      try {
+         eacs.waitUntilAllCompleted();
+      } catch (InterruptedException e) {
+         Thread.currentThread().interrupt();
+         throw new org.infinispan.persistence.spi.PersistenceException(e);
+      }
       if (eacs.isExceptionThrown()) {
          throw new JpaStoreException(eacs.getFirstException());
       }

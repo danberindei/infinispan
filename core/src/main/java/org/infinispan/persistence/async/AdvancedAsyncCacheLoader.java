@@ -89,13 +89,18 @@ public class AdvancedAsyncCacheLoader extends AsyncCacheLoader implements Advanc
          submitProcessTask(cacheLoaderTask, eacs, taskContext, batch);
       }
 
-      eacs.waitUntilAllCompleted();
+      try {
+         eacs.waitUntilAllCompleted();
+      } catch (InterruptedException e) {
+         Thread.currentThread().interrupt();
+         throw new PersistenceException(e);
+      }
       if (eacs.isExceptionThrown()) {
          throw new PersistenceException("Execution exception!", eacs.getFirstException());
       }
    }
 
-   private void submitProcessTask(final CacheLoaderTask cacheLoaderTask, CompletionService<Void> ecs, final TaskContext taskContext, final Set<Object> batch) {
+   private void submitProcessTask(final CacheLoaderTask cacheLoaderTask, ExecutorAllCompletionService<Void> ecs, final TaskContext taskContext, final Set<Object> batch) {
       ecs.submit(new Callable() {
          @Override
          public Object call() throws Exception {

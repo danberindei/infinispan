@@ -217,7 +217,12 @@ public class JdbcBinaryStore implements AdvancedLoadWriteStore {
                }
             });
          }
-         ecs.waitUntilAllCompleted();
+         try {
+            ecs.waitUntilAllCompleted();
+         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new PersistenceException(e);
+         }
          if (ecs.isExceptionThrown()) {
             throw new PersistenceException("Execution exception!", ecs.getFirstException());
          }
