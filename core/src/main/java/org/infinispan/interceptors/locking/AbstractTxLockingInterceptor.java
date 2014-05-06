@@ -94,7 +94,7 @@ public abstract class AbstractTxLockingInterceptor extends AbstractLockingInterc
 
    protected final Object invokeNextAndCommitIf1Pc(TxInvocationContext ctx, PrepareCommand command) throws Throwable {
       Object result = invokeNextInterceptor(ctx, command);
-      if (command.isOnePhaseCommit() && releaseLockOnTxCompletion(ctx)) {
+      if (command.isOnePhaseCommit() && releaseLockOnTxCompletion()) {
          lockManager.unlockAll(ctx);
       }
       return result;
@@ -220,7 +220,7 @@ public abstract class AbstractTxLockingInterceptor extends AbstractLockingInterc
                                        txContext.getGlobalTransaction() + ". Waiting to complete tx: " + tx + ".");
    }
 
-   private boolean releaseLockOnTxCompletion(TxInvocationContext ctx) {
-      return ctx.isOriginLocal() || Configurations.isSecondPhaseAsync(cacheConfiguration);
+   private boolean releaseLockOnTxCompletion() {
+      return !cacheConfiguration.clustering().cacheMode().isSynchronous() || Configurations.isSecondPhaseAsync(cacheConfiguration);
    }
 }

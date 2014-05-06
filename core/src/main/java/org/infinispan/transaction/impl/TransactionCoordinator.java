@@ -1,6 +1,7 @@
 package org.infinispan.transaction.impl;
 
 import org.infinispan.commands.CommandsFactory;
+import org.infinispan.commands.remote.recovery.TxCompletionNotificationCommand;
 import org.infinispan.commands.tx.CommitCommand;
 import org.infinispan.commands.tx.PrepareCommand;
 import org.infinispan.commands.tx.RollbackCommand;
@@ -13,6 +14,10 @@ import org.infinispan.factories.annotations.Inject;
 import org.infinispan.factories.annotations.Start;
 import org.infinispan.factories.annotations.Stop;
 import org.infinispan.interceptors.InterceptorChain;
+import org.infinispan.interceptors.locking.ClusteringDependentLogic;
+import org.infinispan.remoting.rpc.RpcManager;
+import org.infinispan.remoting.transport.Address;
+import org.infinispan.transaction.LockingMode;
 import org.infinispan.transaction.xa.GlobalTransaction;
 import org.infinispan.transaction.xa.recovery.RecoveryManager;
 import org.infinispan.util.logging.Log;
@@ -20,10 +25,12 @@ import org.infinispan.util.logging.LogFactory;
 
 import javax.transaction.Transaction;
 import javax.transaction.xa.XAException;
+import java.util.Collection;
 import java.util.List;
 
 import static javax.transaction.xa.XAResource.XA_OK;
 import static javax.transaction.xa.XAResource.XA_RDONLY;
+import static org.infinispan.util.DeltaCompositeKeyUtil.filterDeltaCompositeKeys;
 
 /**
  * Coordinates transaction prepare/commits as received from the {@link javax.transaction.TransactionManager}.
@@ -37,6 +44,8 @@ import static javax.transaction.xa.XAResource.XA_RDONLY;
 public class TransactionCoordinator {
 
    private static final Log log = LogFactory.getLog(TransactionCoordinator.class);
+   private static final boolean trace = log.isTraceEnabled();
+
    private CommandsFactory commandsFactory;
    private InvocationContextFactory icf;
    private InterceptorChain invoker;
@@ -44,20 +53,31 @@ public class TransactionCoordinator {
    private RecoveryManager recoveryManager;
    private Configuration configuration;
    private CommandCreator commandCreator;
-   private volatile boolean shuttingDown = false;
+   private ClusteringDependentLogic clusteringLogic;
+   private RpcManager rpcManager;
 
-   boolean trace;
+   private boolean needTxCompletionNotificationAfterCommit;
+   private boolean needTxCompletionNotificationAfterRollback;
+   private boolean isPessimisticLocking;
+   private boolean isTotalOrder;
+   private volatile boolean shuttingDown = false;
 
    @Inject
    public void init(CommandsFactory commandsFactory, InvocationContextFactory icf, InterceptorChain invoker,
-                    TransactionTable txTable, RecoveryManager recoveryManager, Configuration configuration) {
+                    TransactionTable txTable, RecoveryManager recoveryManager, Configuration configuration,
+                    ClusteringDependentLogic clusteringLogic, RpcManager rpcManager) {
       this.commandsFactory = commandsFactory;
       this.icf = icf;
       this.invoker = invoker;
       this.txTable = txTable;
       this.recoveryManager = recoveryManager;
       this.configuration = configuration;
-      trace = log.isTraceEnabled();
+      this.clusteringLogic = clusteringLogic;
+      this.rpcManager = rpcManager;
+      this.needTxCompletionNotificationAfterCommit = configuration.clustering().cacheMode().isClustered() && !Configurations.isSecondPhaseAsync(configuration);
+      this.needTxCompletionNotificationAfterRollback = needTxCompletionNotificationAfterCommit && configuration.transaction().syncRollbackPhase();
+      this.isPessimisticLocking = configuration.transaction().lockingMode() == LockingMode.PESSIMISTIC;
+      this.isTotalOrder = configuration.transaction().transactionProtocol().isTotalOrder();
    }
 
    @Start(priority = 1)
@@ -210,9 +230,10 @@ public class TransactionCoordinator {
       } finally {
          txTable.failureCompletingTransaction(ctx.getTransaction());
       }
+      //this is a heuristic rollback
       XAException xe = new XAException(XAException.XA_HEURRB);
       xe.initCause(e);
-      throw xe; //this is a heuristic rollback
+      throw xe;
    }
 
    private void commitInternal(LocalTxInvocationContext ctx) throws XAException {
@@ -229,7 +250,39 @@ public class TransactionCoordinator {
       if (trace) log.tracef("rollback transaction %s ", ctx.getGlobalTransaction());
       RollbackCommand rollbackCommand = commandsFactory.buildRollbackCommand(ctx.getGlobalTransaction());
       invoker.invoke(ctx, rollbackCommand);
-      txTable.removeLocalTransaction(ctx.getCacheTransaction());
+
+      LocalTransaction localTransaction = ctx.getCacheTransaction();
+      final GlobalTransaction gtx = ctx.getGlobalTransaction();
+      txTable.removeLocalTransaction(localTransaction);
+      if (configuration.clustering().cacheMode().isClustered() && configuration.transaction().syncRollbackPhase()) {
+         final TxCompletionNotificationCommand command = commandsFactory.buildTxCompletionNotificationCommand(null, gtx);
+         final Collection<Address> owners = clusteringLogic.getOwners(filterDeltaCompositeKeys(localTransaction.getAffectedKeys()));
+         Collection<Address> commitNodes = localTransaction.getCommitNodes(owners, rpcManager.getTopologyId(), rpcManager.getMembers());
+         log.tracef("About to invoke tx completion notification on commitNodes: %s", commitNodes);
+         rpcManager.invokeRemotely(commitNodes, command, rpcManager.getDefaultRpcOptions(false, false));
+      }
+   }
+
+   public void releaseLocksForCompletedTransaction(LocalTransaction localTransaction, boolean committedInOnePhase) {
+      final GlobalTransaction gtx = localTransaction.getGlobalTransaction();
+      txTable.removeLocalTransaction(localTransaction);
+      removeTransactionInfoRemotely(localTransaction, gtx);
+   }
+
+   private void removeTransactionInfoRemotely(LocalTransaction localTransaction, GlobalTransaction gtx) {
+      if (mayHaveRemoteLocks(localTransaction) && !needTxCompletionNotificationAfterCommit) {
+         final TxCompletionNotificationCommand command = commandsFactory.buildTxCompletionNotificationCommand(null, gtx);
+         final Collection<Address> owners = clusteringLogic.getOwners(filterDeltaCompositeKeys(localTransaction.getAffectedKeys()));
+         Collection<Address> commitNodes = localTransaction.getCommitNodes(owners, rpcManager.getTopologyId(), rpcManager.getMembers());
+         log.tracef("About to invoke tx completion notification on commitNodes: %s", commitNodes);
+         rpcManager.invokeRemotely(commitNodes, command, rpcManager.getDefaultRpcOptions(false, false));
+      }
+   }
+
+   private boolean mayHaveRemoteLocks(LocalTransaction lt) {
+      return !isTotalOrder && (lt.getRemoteLocksAcquired() != null && !lt.getRemoteLocksAcquired().isEmpty() ||
+            !lt.getModifications().isEmpty() ||
+            isPessimisticLocking && lt.getTopologyId() != rpcManager.getTopologyId());
    }
 
    private void validateNotMarkedForRollback(LocalTransaction localTransaction) throws XAException {
