@@ -176,6 +176,9 @@ public class OutboundTransferTask implements Runnable {
 
          // send the last chunk of all segments
          sendEntries(true);
+         if (trace) {
+            log.tracef("Outbound transfer of segments %s of cache %s to node %s is complete", segments, cacheName, destination);
+         }
       } catch (Throwable t) {
          // ignore eventual exceptions caused by cancellation (have InterruptedException as the root cause)
          if (isCancelled()) {
@@ -183,9 +186,6 @@ public class OutboundTransferTask implements Runnable {
          } else {
             log.failedOutBoundTransferExecution(t);
          }
-      }
-      if (trace) {
-         log.tracef("Outbound transfer of segments %s of cache %s to node %s is complete", segments, cacheName, destination);
       }
    }
 

@@ -260,8 +260,15 @@ public class StateSequencer {
             return;
          }
 
-         log.tracef("Waiting for states %s to enter %s", state.dependencies, stateName);
-         for (String dependency : state.dependencies) {
+         List<String> dependencies = new ArrayList<>(state.dependencies);
+         for (Iterator<String> it = dependencies.iterator(); it.hasNext(); ) {
+            String dependency = it.next();
+            if (stateMap.get(dependency).signalled) {
+               it.remove();
+            }
+         }
+         log.tracef("Waiting for states %s to enter %s", dependencies, stateName);
+         for (String dependency : dependencies) {
             State depState = stateMap.get(dependency);
             nanos = waitForState(depState, nanos);
             if (nanos <= 0 && !depState.signalled) {
