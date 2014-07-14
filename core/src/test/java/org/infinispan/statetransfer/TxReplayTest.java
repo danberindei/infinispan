@@ -61,6 +61,8 @@ public class TxReplayTest extends MultipleCacheManagersTest {
       transaction.runCommit(false);
 
       assertNoTransactions();
+      assertNotLocked(0, key);
+      assertNotLocked(2, key);
 
       assertEquals("Wrong number of prepares!", 1, interceptor.numberPrepares.get());
       assertEquals("Wrong number of commits!", 1, interceptor.numberCommits.get());

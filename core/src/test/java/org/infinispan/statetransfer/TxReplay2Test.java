@@ -123,6 +123,8 @@ public class TxReplay2Test extends MultipleCacheManagersTest {
       secondCommitFuture.get(10, SECONDS);
 
       assertNoTransactions();
+      assertNotLocked(0, key);
+      assertNotLocked(2, key);
 
       assertEquals("Wrong number of prepares!", 2, newBackupCounter.numberPrepares.get());
       assertEquals("Wrong number of commits!", 2, newBackupCounter.numberCommits.get());
@@ -138,6 +140,8 @@ public class TxReplay2Test extends MultipleCacheManagersTest {
       assertEquals("Wrong number of rollbacks!", 0, primaryCounter.numberRollbacks.get());
 
       checkKeyInDataContainer(key);
+
+      cache(0).remove(key);
    }
 
    @Override
