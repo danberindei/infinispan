@@ -1201,4 +1201,7 @@ public interface Log extends BasicLogger {
          "Either restart it or recreate the cache container.", id = 324)
    IllegalLifecycleStateException cacheIsStopping(String cacheName);
 
+   @LogMessage(level = WARN)
+   @Message(value = "Remote transaction %s timed out. Rolling back after %d ms", id = 325)
+   void remoteTransactionTimeout(GlobalTransaction gtx, long ageMilliSeconds);
 }

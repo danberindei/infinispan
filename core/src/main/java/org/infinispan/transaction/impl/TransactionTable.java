@@ -38,6 +38,7 @@ import org.infinispan.util.logging.LogFactory;
 
 import javax.transaction.Transaction;
 import javax.transaction.TransactionSynchronizationRegistry;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -149,16 +150,23 @@ public class TransactionTable {
                completedTransactionsInfo.cleanupCompletedTransactions();
             }
          }, interval, interval, TimeUnit.MILLISECONDS);
+
+         executorService.scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+               cleanupTimedOutTransactions();
+            }
+         }, interval, interval, TimeUnit.MILLISECONDS);
       }
    }
 
    @Stop
    @SuppressWarnings("unused")
    private void stop() {
-      
+
       if (executorService != null)
          executorService.shutdownNow();
-      
+
       if (clustered) {
          notifier.removeListener(this);
          currentTopologyId = CACHE_STOPPED_TOPOLOGY_ID; // indicate that the cache has stopped
@@ -184,8 +192,8 @@ public class TransactionTable {
    public void enlist(Transaction transaction, LocalTransaction localTransaction) {
       if (!localTransaction.isEnlisted()) {
          SynchronizationAdapter sync = new SynchronizationAdapter(
-               localTransaction, txCoordinator, commandsFactory, rpcManager,
-               this, clusteringLogic, configuration);
+                localTransaction, txCoordinator, commandsFactory, rpcManager,
+                this, clusteringLogic, configuration);
          if (transactionSynchronizationRegistry != null) {
             try {
                transactionSynchronizationRegistry.registerInterposedSynchronization(sync);
@@ -227,7 +235,7 @@ public class TransactionTable {
       return minTxTopologyId;
    }
 
-   public void cleanupStaleTransactions(CacheTopology cacheTopology) {
+   public void cleanupLeaverTransactions(CacheTopology cacheTopology) {
       int topologyId = cacheTopology.getTopologyId();
       List<Address> members = cacheTopology.getMembers();
 
@@ -237,7 +245,7 @@ public class TransactionTable {
 
       log.tracef("Checking for transactions originated on leavers. Current members are %s, remote transactions: %d",
             members, remoteTransactions.size());
-      Set<GlobalTransaction> toKill = new HashSet<GlobalTransaction>();
+      List<GlobalTransaction> toKill = new ArrayList<GlobalTransaction>();
       for (Map.Entry<GlobalTransaction, RemoteTransaction> e : remoteTransactions.entrySet()) {
          GlobalTransaction gt = e.getKey();
          RemoteTransaction remoteTx = e.getValue();
@@ -249,25 +257,56 @@ public class TransactionTable {
       }
 
       if (toKill.isEmpty()) {
-         log.tracef("No global transactions pertain to originator(s) who have left the cluster.");
+         log.tracef("No remote transactions pertain to originator(s) who have left the cluster.");
       } else {
-         log.tracef("%s global transactions pertain to leavers and need to be killed", toKill.size());
+         log.debugf("The originating node left the cluster for %d remote transactions", toKill.size());
       }
 
       for (GlobalTransaction gtx : toKill) {
-         log.tracef("Killing remote transaction originating on leaver %s", gtx);
-         RollbackCommand rc = new RollbackCommand(cacheName, gtx);
-         rc.init(invoker, icf, TransactionTable.this);
-         try {
-            rc.perform(null);
-            log.tracef("Rollback of transaction %s complete.", gtx);
-         } catch (Throwable e) {
-            log.unableToRollbackGlobalTx(gtx, e);
-         }
+         log.debugf("Rolling back transaction %s because originator %s left the cluster", gtx, gtx.getAddress());
+         killTransaction(gtx);
       }
 
       log.tracef("Completed cleaning transactions originating on leavers. Remote transactions remaining: %d",
             remoteTransactions.size());
+   }
+
+   public void cleanupTimedOutTransactions() {
+      log.tracef("About to cleanup remote transactions older than %d ms", configuration.transaction().completedTxTimeout());
+      long beginning = timeService.time();
+      long cutoffCreationTime = beginning - TimeUnit.MILLISECONDS.toNanos(configuration.transaction().completedTxTimeout());
+      List<GlobalTransaction> toKill = new ArrayList<GlobalTransaction>();
+
+      // Check remote transactions.
+      for(Map.Entry<GlobalTransaction, RemoteTransaction> e : remoteTransactions.entrySet()) {
+         GlobalTransaction gtx = e.getKey();
+         RemoteTransaction remoteTx = e.getValue();
+         if(remoteTx != null) {
+            log.tracef("Checking transaction %s", gtx);
+            // Check the time.
+            if (remoteTx.getCreationTime() - cutoffCreationTime < 0) {
+               long duration = timeService.timeDuration(remoteTx.getCreationTime(), beginning, TimeUnit.MILLISECONDS);
+               log.remoteTransactionTimeout(gtx, duration);
+               toKill.add(gtx);
+            }
+         }
+      }
+
+      // Rollback the orphaned transactions and release any held locks.
+      for (GlobalTransaction gtx : toKill) {
+         killTransaction(gtx);
+      }
+   }
+
+   private void killTransaction(GlobalTransaction gtx) {
+      RollbackCommand rc = new RollbackCommand(cacheName, gtx);
+      rc.init(invoker, icf, TransactionTable.this);
+      try {
+         rc.perform(null);
+         log.tracef("Rollback of transaction %s complete.", gtx);
+      } catch (Throwable e) {
+         log.unableToRollbackGlobalTx(gtx, e);
+      }
    }
 
    /**
