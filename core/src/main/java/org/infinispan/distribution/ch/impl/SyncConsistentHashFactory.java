@@ -50,7 +50,7 @@ import java.util.Set;
 public class SyncConsistentHashFactory implements ConsistentHashFactory<DefaultConsistentHash> {
 
    public static final float OWNED_SEGMENTS_ALLOWED_VARIATION = 1.10f;
-   public static final float PRIMARY_SEGMENTS_ALLOWED_VARIATION = 1.20f;
+   public static final float PRIMARY_SEGMENTS_ALLOWED_VARIATION = 1.10f;
 
    @Override
    public DefaultConsistentHash create(Hash hashFunction, int numOwners, int numSegments, List<Address> members,

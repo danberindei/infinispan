@@ -61,11 +61,26 @@ public class OwnershipStatistics {
       return primaryOwned[i];
    }
 
+   public int getPrimaryOwned(int index) {
+      return primaryOwned[index];
+   }
+
    public int getOwned(Address a) {
       Integer i = nodes.get(a);
       if (i == null)
          return 0;
       return owned[i];
+   }
+
+   public int getOwned(int index) {
+      return owned[index];
+   }
+
+   public int getIndex(Address a) {
+      Integer i = nodes.get(a);
+      if (i == null)
+         throw new IllegalArgumentException("Only applicable for members");
+      return i;
    }
 
    public void incPrimaryOwned(Address a) {

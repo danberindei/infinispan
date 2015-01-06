@@ -5,6 +5,7 @@ import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.distribution.ch.impl.DefaultConsistentHash;
 import org.infinispan.distribution.ch.impl.OwnershipStatistics;
 import org.infinispan.distribution.group.PartitionerConsistentHash;
+import org.infinispan.distribution.ch.impl.SyncConsistentHashFactory;
 import org.infinispan.remoting.transport.Address;
 import org.infinispan.test.MultipleCacheManagersTest;
 import org.infinispan.test.TestingUtil;
@@ -22,8 +23,6 @@ import static org.testng.AssertJUnit.assertEquals;
  */
 @Test(groups = "functional", testName = "distribution.ch.CapacityFactorsFunctionalTest")
 public class CapacityFactorsFunctionalTest extends MultipleCacheManagersTest {
-
-   public static final int NUM_SEGMENTS = 60;
 
    @Override
    protected void createCacheManagers() throws Throwable {
@@ -80,7 +79,8 @@ public class CapacityFactorsFunctionalTest extends MultipleCacheManagersTest {
       OwnershipStatistics stats = new OwnershipStatistics(ch, ch.getMembers());
       int numNodes = expectedPrimaryOwned.length;
       for (int i = 0; i < numNodes; i++) {
-         assertEquals((double) expectedPrimaryOwned[i], (double) stats.getPrimaryOwned(address(i)), 1.0);
+         double maxDeviation = SyncConsistentHashFactory.OWNED_SEGMENTS_ALLOWED_VARIATION * expectedPrimaryOwned[i] + 1;
+         assertEquals((double) expectedPrimaryOwned[i], (double) stats.getPrimaryOwned(address(i)), maxDeviation);
       }
    }
 
@@ -89,7 +89,8 @@ public class CapacityFactorsFunctionalTest extends MultipleCacheManagersTest {
       OwnershipStatistics stats = new OwnershipStatistics(ch, ch.getMembers());
       int numNodes = expectedOwned.length;
       for (int i = 0; i < numNodes; i++) {
-         assertEquals((double)expectedOwned[i], (double)stats.getOwned(address(i)), 1.0);
+         double maxDeviation = SyncConsistentHashFactory.OWNED_SEGMENTS_ALLOWED_VARIATION * expectedOwned[i] + 1;
+         assertEquals((double)expectedOwned[i], (double)stats.getOwned(address(i)), maxDeviation);
       }
    }
 }

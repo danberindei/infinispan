@@ -24,6 +24,7 @@ import java.util.Set;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertSame;
 import static org.testng.Assert.assertTrue;
+import static org.testng.AssertJUnit.fail;
 
 /**
  * Test the even distribution and number of moved segments after rebalance for {@link DefaultConsistentHashFactory}
@@ -197,24 +198,33 @@ public class DefaultConsistentHashFactoryTest extends AbstractInfinispanTest {
          float capacityFactor = lfMap != null ? lfMap.get(node) : 1;
          float expectedPrimaryOwned = expectedPrimaryOwned(numSegments, numNodes, totalCapacity, capacityFactor);
          float deviationPrimaryOwned = allowedDeviationPrimaryOwned(numSegments, numNodes, totalCapacity, maxCapacityFactor);
-         int minPrimaryOwned = (int) Math.floor(expectedPrimaryOwned - deviationPrimaryOwned);
-         int maxPrimaryOwned = (int) Math.ceil(expectedPrimaryOwned + deviationPrimaryOwned);
+         int minPrimaryOwned = (int) Math.floor(Math.min((1 - deviationPrimaryOwned) * expectedPrimaryOwned,
+               expectedPrimaryOwned - 1));
+         int maxPrimaryOwned = (int) Math.ceil(Math.max((1 + deviationPrimaryOwned) * expectedPrimaryOwned, expectedPrimaryOwned + 1));
          if (!allowExtraOwners) {
             int primaryOwned = stats.getPrimaryOwned(node);
-            assertTrue(minPrimaryOwned <= primaryOwned);
+            if (checkMinOwned()) {
+               assertTrue(minPrimaryOwned <= primaryOwned);
+            }
             assertTrue(primaryOwned <= maxPrimaryOwned);
          }
 
          float expectedOwned = expectedOwnedMap.get(node);
          float deviationOwned = allowedDeviationOwned(numSegments, actualNumOwners, numNodes, totalCapacity, maxCapacityFactor);
-         int minOwned = (int) Math.floor(expectedOwned - deviationOwned);
-         int maxOwned = (int) Math.ceil(expectedOwned + deviationOwned);
+         int minOwned = (int) Math.floor(Math.min((1 - 2 * deviationOwned) * expectedOwned, expectedOwned - 1));
+         int maxOwned = (int) Math.ceil(Math.max((1 + deviationOwned) * expectedOwned, expectedOwned + 1));
          int owned = stats.getOwned(node);
-         assertTrue(Math.floor(minOwned) <= owned);
+         if (checkMinOwned()) {
+            assertTrue(minOwned <= owned);
+         }
          if (!allowExtraOwners) {
-            assertTrue(owned <= Math.ceil(maxOwned));
+            assertTrue(owned <= maxOwned);
          }
       }
+   }
+
+   protected boolean checkMinOwned() {
+      return true;
    }
 
    public int computeActualNumOwners(int numOwners, List<Address> members, Map<Address, Float> capacityFactors) {
@@ -235,7 +245,7 @@ public class DefaultConsistentHashFactoryTest extends AbstractInfinispanTest {
    }
 
    protected float allowedDeviationPrimaryOwned(int numSegments, int numNodes, float totalCapacity, float maxCapacityFactor) {
-      return numNodes * maxCapacityFactor / totalCapacity;
+      return 0.1f;
    }
 
    protected Map<Address, Float> computeExpectedOwned(int numSegments, int numNodes, int actualNumOwners,
@@ -278,8 +288,8 @@ public class DefaultConsistentHashFactoryTest extends AbstractInfinispanTest {
    }
 
    protected float allowedDeviationOwned(int numSegments, int actualNumOwners, int numNodes, float totalCapacity,
-                                          float maxCapacityFactor) {
-      return numNodes * maxCapacityFactor / totalCapacity;
+                                         float maxCapacityFactor) {
+      return 0.1f;
    }
 
    private float computeTotalCapacity(Collection<Address> nodes, Map<Address, Float> capacityFactors) {
@@ -309,7 +319,8 @@ public class DefaultConsistentHashFactoryTest extends AbstractInfinispanTest {
 
    protected int allowedExtraMoves(DefaultConsistentHash oldCH, DefaultConsistentHash newCH,
                                    int leaverSegments) {
-      return (int) Math.ceil(0.25 * oldCH.getNumSegments());
+      int maxMembers = Math.max(oldCH.getMembers().size(), newCH.getMembers().size());
+      return (int) Math.ceil(1. * oldCH.getNumOwners() * oldCH.getNumSegments() / maxMembers);
    }
 
    private void checkMovedSegments(DefaultConsistentHash oldCH, DefaultConsistentHash newCH) {
@@ -338,12 +349,12 @@ public class DefaultConsistentHashFactoryTest extends AbstractInfinispanTest {
       int movedSegments = oldMembersAddedSegments - leaverSegments;
       int expectedExtraMoves = allowedExtraMoves(oldCH, newCH, leaverSegments);
       if (movedSegments > expectedExtraMoves) {
-         log.debugf("%d of %d segments moved, %d (%fx) more than expected (%d)", movedSegments, numSegments,
-               movedSegments - expectedExtraMoves, (float) movedSegments / expectedExtraMoves, expectedExtraMoves);
+         log.debugf("Moved %d segments, expected %d", movedSegments, expectedExtraMoves);
+         log.debugf("old: %s: %s", oldCH, oldCH.getRoutingTableAsString());
+         log.debugf("new: %s: %s", newCH.getRoutingTableAsString());
+         fail(String.format("Two many moved segments between %s and %s: expected %d, got %d", oldCH, newCH,
+               expectedExtraMoves, oldMembersAddedSegments));
       }
-      assert movedSegments <= expectedExtraMoves
-               : String.format("Two many moved segments between %s and %s: expected %d, got %d",
-            oldCH, newCH, expectedExtraMoves, oldMembersAddedSegments);
    }
 
    protected <T> Set<T> symmetricalDiff(Collection <T> set1, Collection<T> set2) {

@@ -1,18 +1,18 @@
 package org.infinispan.distribution.ch.impl;
 
+import org.infinispan.commons.marshall.AbstractExternalizer;
+import org.infinispan.distribution.topologyaware.TopologyInfo;
+import org.infinispan.distribution.topologyaware.TopologyLevel;
+import org.infinispan.marshall.core.Ids;
+import org.infinispan.remoting.transport.Address;
+import org.infinispan.remoting.transport.TopologyAwareAddress;
+
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
-import org.infinispan.distribution.topologyaware.TopologyInfo;
-import org.infinispan.distribution.topologyaware.TopologyLevel;
-import org.infinispan.commons.marshall.AbstractExternalizer;
-import org.infinispan.marshall.core.Ids;
-import org.infinispan.remoting.transport.Address;
-import org.infinispan.remoting.transport.TopologyAwareAddress;
 
 /**
  * Default topology-aware consistent hash factory implementation.
@@ -74,8 +74,8 @@ public class TopologyAwareConsistentHashFactory extends DefaultConsistentHashFac
          float totalCapacity = topologyInfo.computeTotalCapacity(builder.getMembers(), builder.getCapacityFactors());
          for (Address candidate : builder.getMembers()) {
             int nodeExtraSegments = (int) (extraSegments * builder.getCapacityFactor(candidate) / totalCapacity);
-            int maxSegments = topologyInfo.computeExpectedSegments(builder.getNumSegments(),
-                  builder.getActualNumOwners(), candidate) + nodeExtraSegments;
+            int maxSegments = (int) Math.round(topologyInfo.computeExpectedSegments(builder.getNumSegments(),
+                  builder.getActualNumOwners(), candidate)) + nodeExtraSegments;
             if (builder.getOwned(candidate) < maxSegments) {
                if (!owners.contains(candidate) && !locationIsDuplicate(owners, candidate, level)) {
                   builder.addOwner(segment, candidate);
@@ -120,8 +120,8 @@ public class TopologyAwareConsistentHashFactory extends DefaultConsistentHashFac
             if (locationIsDuplicate(owners, owner, level)) {
                // Got a duplicate site/rack/machine, we might have an alternative for it.
                for (Address candidate : builder.getMembers()) {
-                  int expectedSegments = topologyInfo.computeExpectedSegments(builder.getNumSegments(),
-                        builder.getActualNumOwners(), candidate);
+                  int expectedSegments = (int) Math.round(topologyInfo.computeExpectedSegments(builder.getNumSegments(),
+                        builder.getActualNumOwners(), candidate));
                   int nodeExtraSegments = (int) (extraSegments * builder.getCapacityFactor(candidate) / totalCapacity);
                   if (builder.getOwned(candidate) < expectedSegments + nodeExtraSegments) {
                      if (!owners.contains(candidate) && !locationIsDuplicate(owners, candidate, level)) {
@@ -166,13 +166,13 @@ public class TopologyAwareConsistentHashFactory extends DefaultConsistentHashFac
          for (int segment = 0; segment < builder.getNumSegments(); segment++) {
             List<Address> owners = builder.getOwners(segment);
             Address owner = owners.get(ownerIdx);
-            int maxSegments = topologyInfo.computeExpectedSegments(builder.getNumSegments(),
-                  builder.getActualNumOwners(), owner) + maxSegmentsDiff;
+            int maxSegments = (int) Math.round(topologyInfo.computeExpectedSegments(builder.getNumSegments(),
+                  builder.getActualNumOwners(), owner)) + maxSegmentsDiff;
             if (builder.getOwned(owner) > maxSegments) {
                // Owner has too many segments. Find another node to replace it with.
                for (Address candidate : builder.getMembers()) {
-                  int minSegments = topologyInfo.computeExpectedSegments(builder.getNumSegments(),
-                        builder.getActualNumOwners(), candidate) + minSegmentsDiff;
+                  int minSegments = (int) Math.round(topologyInfo.computeExpectedSegments(builder.getNumSegments(),
+                        builder.getActualNumOwners(), candidate)) + minSegmentsDiff;
                   if (builder.getOwned(candidate) < minSegments) {
                      if (!owners.contains(candidate) && maintainsDiversity(owners, candidate, owner)) {
                         builder.addOwner(segment, candidate);

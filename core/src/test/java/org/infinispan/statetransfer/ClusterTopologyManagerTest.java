@@ -48,6 +48,7 @@ public class ClusterTopologyManagerTest extends MultipleCacheManagersTest {
    @Override
    protected void createCacheManagers() throws Throwable {
       defaultConfig = getDefaultClusteredCacheConfig(CacheMode.DIST_SYNC, true);
+//      createClusteredCaches(3, CACHE_NAME, defaultConfig, new TransportFlags().withFD(true).withMerge(true));
       createClusteredCaches(3, defaultConfig, new TransportFlags().withFD(true).withMerge(true));
 
       c1 = cache(0, CACHE_NAME);

@@ -581,7 +581,7 @@ class TopologyAwareOwnershipStatistics {
    }
 
    public int computeExpectedSegments(int numSegments, int numOwners, Address node) {
-      return topologyInfo.computeExpectedSegments(numSegments, numOwners, node);
+      return (int) Math.round(topologyInfo.computeExpectedSegments(numSegments, numOwners, node));
    }
 
    @Override
@@ -597,8 +597,8 @@ class TopologyAwareOwnershipStatistics {
                      getMachinePrimaryOwned(site, rack, machine),
                      getMachineOwned(site, rack, machine)));
                for (Address node : topologyInfo.getMachineNodes(site, rack, machine)) {
-                  int expectedPrimarySegments = topologyInfo.computeExpectedSegments(numSegments, 1, node);
-                  int expectedOwnedSegments = topologyInfo.computeExpectedSegments(numSegments, numOwners, node);
+                  int expectedPrimarySegments = computeExpectedSegments(numSegments, 1, node);
+                  int expectedOwnedSegments = computeExpectedSegments(numSegments, numOwners, node);
                   sb.append(String.format("        %s: %d/%d (%d/%d)\n", node, stats.getPrimaryOwned(node),
                         stats.getOwned(node), expectedPrimarySegments, expectedOwnedSegments));
                }

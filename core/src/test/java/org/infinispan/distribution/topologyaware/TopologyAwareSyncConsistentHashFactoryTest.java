@@ -1,14 +1,14 @@
 package org.infinispan.distribution.topologyaware;
 
-import java.util.List;
-
 import org.infinispan.distribution.ch.ConsistentHashFactory;
 import org.infinispan.distribution.ch.impl.DefaultConsistentHash;
-import org.infinispan.distribution.ch.impl.TopologyAwareSyncConsistentHashFactory;
+import org.infinispan.distribution.ch.impl.TopologyAwareSync3ConsistentHashFactory;
 import org.infinispan.remoting.transport.Address;
 import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
 import org.testng.annotations.Test;
+
+import java.util.List;
 
 import static org.testng.Assert.assertTrue;
 
@@ -30,7 +30,7 @@ public class TopologyAwareSyncConsistentHashFactoryTest extends TopologyAwareCon
 
    @Override
    protected ConsistentHashFactory<DefaultConsistentHash> createConsistentHashFactory() {
-      return new TopologyAwareSyncConsistentHashFactory();
+      return new TopologyAwareSync3ConsistentHashFactory();
    }
 
    @Override

@@ -1,8 +1,5 @@
 package org.infinispan.distribution.ch;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.infinispan.commons.hash.MurmurHash3;
 import org.infinispan.distribution.ch.impl.DefaultConsistentHash;
 import org.infinispan.distribution.ch.impl.TopologyAwareSyncConsistentHashFactory;
@@ -11,6 +8,10 @@ import org.infinispan.remoting.transport.jgroups.JGroupsTopologyAwareAddress;
 import org.jgroups.util.ExtendedUUID;
 import org.jgroups.util.TopologyUUID;
 import org.testng.annotations.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Tests the uniformity of the SyncConsistentHashFactory algorithm, which is very similar to the 5.1
@@ -35,10 +36,11 @@ import org.testng.annotations.Test;
 public class TopologyAwareSyncConsistentHashFactoryKeyDistributionTest extends SyncConsistentHashFactoryKeyDistributionTest {
 
    @Override
-   protected DefaultConsistentHash createConsistentHash(int numSegments, int numOwners, List<Address> members) {
+   protected DefaultConsistentHash createConsistentHash(int numSegments, int numOwners, List<Address> members,
+         Map<Address, Float> capacityFactors) {
       MurmurHash3 hash = MurmurHash3.getInstance();
       ConsistentHashFactory<DefaultConsistentHash> chf = new TopologyAwareSyncConsistentHashFactory();
-      DefaultConsistentHash ch = chf.create(hash, numOwners, numSegments, members, null);
+      DefaultConsistentHash ch = chf.create(hash, numOwners, numSegments, members, capacityFactors);
       return ch;
    }
 

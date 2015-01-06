@@ -1,5 +1,8 @@
 package org.infinispan.distribution.topologyaware;
 
+import org.infinispan.remoting.transport.Address;
+import org.infinispan.remoting.transport.TopologyAwareAddress;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -8,9 +11,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.infinispan.remoting.transport.Address;
-import org.infinispan.remoting.transport.TopologyAwareAddress;
 
 
 /**
@@ -282,7 +282,7 @@ public class TopologyInfo {
    }
 
 
-   public int computeExpectedSegments(int numSegments, int numOwners, Address node) {
+   public double computeExpectedSegments(int numSegments, int numOwners, Address node) {
       if (capacityFactors != null && capacityFactors.get(node) == 0.0)
          return 0;
 
@@ -307,7 +307,7 @@ public class TopologyInfo {
       } else {
          maxSegments = computeMaxSegmentsForSite(numSegments, numOwners, allSites.values(), site, rack, machine, node);
       }
-      return (int) Math.round(maxSegments);
+      return maxSegments;
    }
    
    private static class Site {

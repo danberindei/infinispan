@@ -1,10 +1,5 @@
 package org.infinispan.distribution.ch.impl;
 
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
-import java.util.*;
-
 import org.infinispan.commons.hash.Hash;
 import org.infinispan.commons.marshall.AbstractExternalizer;
 import org.infinispan.distribution.ch.ConsistentHashFactory;
@@ -12,6 +7,17 @@ import org.infinispan.marshall.core.Ids;
 import org.infinispan.remoting.transport.Address;
 import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
+
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Default implementation of {@link ConsistentHashFactory}.
@@ -250,12 +256,15 @@ public class DefaultConsistentHashFactory implements ConsistentHashFactory<Defau
     */
    private Address findWorstPrimaryOwner(Builder builder, List<Address> nodes) {
       Address worst = null;
-      float maxSegmentsPerCapacity = -1;
+      float worstSegments = 0;
+      float worstCapacityFactor = 0;
       for (Address owner : nodes) {
          float capacityFactor = builder.getCapacityFactor(owner);
-         if (builder.getPrimaryOwned(owner) - 1 >= capacityFactor * maxSegmentsPerCapacity) {
+         int primarySegments = builder.getPrimaryOwned(owner);
+         if (worst == null || primarySegments * worstCapacityFactor > capacityFactor * worstSegments) {
             worst = owner;
-            maxSegmentsPerCapacity = capacityFactor != 0 ? (builder.getPrimaryOwned(owner) - 1) / capacityFactor : 0;
+            worstSegments = primarySegments;
+            worstCapacityFactor = capacityFactor;
          }
       }
       return worst;
@@ -266,12 +275,15 @@ public class DefaultConsistentHashFactory implements ConsistentHashFactory<Defau
     */
    private Address findWorstBackupOwner(Builder builder, List<Address> nodes) {
       Address worst = null;
-      float maxSegmentsPerCapacity = -1;
+      float worstSegments = -1;
+      float worstCapacityFactor = -1;
       for (Address owner : nodes) {
          float capacityFactor = builder.getCapacityFactor(owner);
-         if (worst == null || builder.getOwned(owner) - 1 >= capacityFactor * maxSegmentsPerCapacity) {
+         int ownedSegments = builder.getOwned(owner);
+         if (worst == null || ownedSegments * worstCapacityFactor > capacityFactor * worstSegments) {
             worst = owner;
-            maxSegmentsPerCapacity = capacityFactor != 0 ? (builder.getOwned(owner) - 1) / capacityFactor : 0;
+            worstSegments = ownedSegments;
+            worstCapacityFactor = capacityFactor;
          }
       }
       return worst;
@@ -333,16 +345,16 @@ public class DefaultConsistentHashFactory implements ConsistentHashFactory<Defau
       // than the owned/capacity ratio of the new owner after adding the current segment, so that a future pass
       // won't try to switch them back.
       Address best = null;
-      float initialCapacityFactor = owner != null ? builder.getCapacityFactor(owner) : 0;
-      float bestSegmentsPerCapacity = initialCapacityFactor != 0 ? (builder.getOwned(owner) - 1 ) / initialCapacityFactor :
-            Float.MAX_VALUE;
+      float bestCapacityFactor = owner != null ? builder.getCapacityFactor(owner) : 0;
+      int bestSegments = owner != null ? builder.getOwned(owner) : builder.getNumSegments();
       for (Address candidate : builder.getMembers()) {
          if (excludes == null || !excludes.contains(candidate)) {
-            int owned = builder.getOwned(candidate);
+            int ownedSegments = builder.getOwned(candidate);
             float capacityFactor = builder.getCapacityFactor(candidate);
-            if ((owned + 1) <= capacityFactor * bestSegmentsPerCapacity) {
+            if ((ownedSegments + 1) * bestCapacityFactor < bestSegments * capacityFactor) {
                best = candidate;
-               bestSegmentsPerCapacity = (owned + 1) / capacityFactor;
+               bestSegments = ownedSegments + 1;
+               bestCapacityFactor = capacityFactor;
             }
          }
       }
@@ -355,22 +367,24 @@ public class DefaultConsistentHashFactory implements ConsistentHashFactory<Defau
     */
    protected Address findNewPrimaryOwner(Builder builder, Collection<Address> candidates,
                                          Address primaryOwner) {
-      float initialCapacityFactor = primaryOwner != null ? builder.getCapacityFactor(primaryOwner) : 0;
-
-      // We want the owned/capacity ratio of the actual primary owner after removing the current segment to be bigger
-      // than the owned/capacity ratio of the new primary owner after adding the current segment, so that a future pass
+      // We want the owned/capacity ratio of the actual owner after removing the current segment to be bigger
+      // than the owned/capacity ratio of the new owner after adding the current segment, so that a future pass
       // won't try to switch them back.
       Address best = null;
-      float bestSegmentsPerCapacity = initialCapacityFactor != 0 ? (builder.getPrimaryOwned(primaryOwner) - 1) /
-            initialCapacityFactor : Float.MAX_VALUE;
+      float bestCapacityFactor = primaryOwner != null ? builder.getCapacityFactor(primaryOwner) : 0;
+      int bestSegments = primaryOwner != null ? builder.getPrimaryOwned(primaryOwner) : builder.getNumSegments();
       for (Address candidate : candidates) {
-         int primaryOwned = builder.getPrimaryOwned(candidate);
+         if (candidate.equals(primaryOwner)) continue;
+
+         int primarySegments = builder.getPrimaryOwned(candidate);
          float capacityFactor = builder.getCapacityFactor(candidate);
-         if ((primaryOwned + 1) <= capacityFactor * bestSegmentsPerCapacity) {
+         if ((primarySegments + 1) * bestCapacityFactor < bestSegments * capacityFactor) {
             best = candidate;
-            bestSegmentsPerCapacity = (primaryOwned + 1) / capacityFactor;
+            bestSegments = primarySegments + 1;
+            bestCapacityFactor = capacityFactor;
          }
       }
+
       return best;
    }
 
