@@ -55,8 +55,13 @@ public class BasePartitionHandlingTest extends MultipleCacheManagersTest {
    protected void createCacheManagers() throws Throwable {
       ConfigurationBuilder dcc = new ConfigurationBuilder();
       dcc.clustering().cacheMode(cacheMode).partitionHandling().enabled(partitionHandling);
+      amendCacheConfiguration(dcc);
       createClusteredCaches(numMembersInCluster, dcc, new TransportFlags().withFD(true).withMerge(true));
       waitForClusterToForm();
+   }
+
+   protected void amendCacheConfiguration(ConfigurationBuilder dcc) {
+      // Do nothing. Sublasses will override it.
    }
 
 
@@ -332,16 +337,21 @@ public class BasePartitionHandlingTest extends MultipleCacheManagersTest {
       List<Address> allMembers = channel(0).getView().getMembers();
       partitions = new Partition[parts.length];
       for (int i = 0; i < parts.length; i++) {
-         Partition p = new Partition(allMembers);
-         for (int j : parts[i]) {
-            p.addNode(channel(j));
-         }
+         Partition p = createPartition(allMembers, parts[i]);
          partitions[i] = p;
          p.partition();
       }
    }
 
-   private Channel channel(int i) {
+   protected Partition createPartition(List<Address> allMembers, int... part) {
+      Partition p = new Partition(allMembers);
+      for (int j : part) {
+         p.addNode(channel(j));
+      }
+      return p;
+   }
+
+   protected Channel channel(int i) {
       Cache<Object, Object> cache = cache(i);
       return channel(cache);
    }

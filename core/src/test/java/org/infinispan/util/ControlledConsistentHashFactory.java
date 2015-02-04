@@ -110,4 +110,11 @@ public class ControlledConsistentHashFactory extends BaseControlledConsistentHas
    public void setMembersToUse(List<Address> membersToUse) {
       this.membersToUse = membersToUse;
    }
+
+   /**
+    * @param membersToUse Owner indexes will be in this list, instead of the current list of members
+    */
+   public void setMembersToUse(Address... membersToUse) {
+      this.membersToUse = Arrays.asList(membersToUse);
+   }
 }
