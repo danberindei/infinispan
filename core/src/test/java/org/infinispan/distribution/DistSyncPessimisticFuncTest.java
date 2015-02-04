@@ -1,6 +1,7 @@
 package org.infinispan.distribution;
 
 import org.infinispan.Cache;
+import org.infinispan.context.Flag;
 import org.infinispan.test.TestingUtil;
 import org.infinispan.transaction.LockingMode;
 import org.testng.annotations.Test;
@@ -38,8 +39,7 @@ public class DistSyncPessimisticFuncTest extends BaseDistFunctionalTest {
       TransactionManager nonOwnerTM = TestingUtil.getTransactionManager(nonOwner);
       nonOwnerTM.begin();
       try {
-//         nonOwner.getAdvancedCache().withFlags(Flag.FORCE_WRITE_LOCK).get(key);
-         nonOwner.put(key, otherValue);
+         nonOwner.getAdvancedCache().withFlags(Flag.FORCE_WRITE_LOCK).get(key);
 
          // Check that the key is locked on the primary
          assertTrue(primaryOwner.getAdvancedCache().getLockManager().isLocked(key));
@@ -51,11 +51,11 @@ public class DistSyncPessimisticFuncTest extends BaseDistFunctionalTest {
          ownerTM.begin();
          try {
             // This should lock the key
-            primaryOwner.getAdvancedCache().lock(key);
+            primaryOwner.put(key, otherValue);
+            ownerTM.commit();
             fail("Should not be able to acquire the lock");
          } catch (Exception e) {
             log.tracef("Caught expected exception %s", e);
-         } finally {
             ownerTM.rollback();
          }
       } finally {
