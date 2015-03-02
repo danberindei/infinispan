@@ -13,6 +13,7 @@ import java.io.ObjectOutput;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Set;
 
 /**
@@ -20,7 +21,7 @@ import java.util.Set;
  * with the same members have the same consistent hash and also tries to distribute segments based on the
  * topology information in {@link org.infinispan.configuration.global.TransportConfiguration}.
  * <p/>
- * It has a drawback compared to {@link org.infinispan.distribution.ch.impl.DefaultConsistentHashFactory}:
+ * It has a drawback compared to {@link DefaultConsistentHashFactory}:
  * it can potentially move a lot more segments during a rebalance than strictly necessary.
  * <p/>
  * It is not recommended using the {@code TopologyAwareSyncConsistentHashFactory} with a very small number
@@ -32,7 +33,8 @@ import java.util.Set;
  */
 public class TopologyAwareSyncConsistentHashFactory extends SyncConsistentHashFactory {
    @Override
-   protected Builder createBuilder(Hash hashFunction, int numOwners, int numSegments, List<Address> members, Map<Address, Float> capacityFactors) {
+   protected SyncConsistentHashFactory.Builder createBuilder(Hash hashFunction, int numOwners, int numSegments,
+         List<Address> members, Map<Address, Float> capacityFactors) {
       return new Builder(hashFunction, numOwners, numSegments, members, capacityFactors);
    }
 
@@ -47,48 +49,28 @@ public class TopologyAwareSyncConsistentHashFactory extends SyncConsistentHashFa
       }
 
       @Override
-      protected void copyOwners() {
-         copyOwnersForLevel(TopologyLevel.SITE);
-         copyOwnersForLevel(TopologyLevel.RACK);
-         copyOwnersForLevel(TopologyLevel.MACHINE);
-         copyOwnersForLevel(TopologyLevel.NODE);
+      protected void addBackupOwnersForSegment(int numCopies, int segment, PriorityQueue<VirtualNode> candidates, List<Address> owners) {
+         addBackupOwnersForLevel(numCopies, segment, candidates, owners, TopologyLevel.SITE);
+         addBackupOwnersForLevel(numCopies, segment, candidates, owners, TopologyLevel.RACK);
+         addBackupOwnersForLevel(numCopies, segment, candidates, owners, TopologyLevel.MACHINE);
+         addBackupOwnersForLevel(numCopies, segment, candidates, owners, TopologyLevel.NODE);
       }
 
-      private void copyOwnersForLevel(TopologyLevel topologyLevel) {
+      private void addBackupOwnersForLevel(int numCopies, int segment, PriorityQueue<VirtualNode> candidates, List<Address> owners,
+            TopologyLevel topologyLevel) {
          currentLevel = topologyLevel;
-         ignoreMaxSegments = false;
-         super.doCopyOwners();
-         ignoreMaxSegments = true;
-         super.doCopyOwners();
+         super.addBackupOwnersForSegment(numCopies, segment, candidates, owners);
       }
 
       @Override
-      protected void addOwner(int segment, Address candidate) {
+      protected boolean addOwner(int segment, Address candidate, boolean updateStats) {
          List<Address> owners = segmentOwners[segment];
-         if (owners.size() < actualNumOwners && !locationAlreadyAdded(candidate, owners, currentLevel)) {
-            if (!ignoreMaxSegments) {
-               if (owners.isEmpty()) {
-                  long maxSegments = Math.round(computeExpectedSegmentsForNode(candidate, 1) * PRIMARY_SEGMENTS_ALLOWED_VARIATION);
-                  if (stats.getPrimaryOwned(candidate) < maxSegments) {
-                     addOwnerNoCheck(segment, candidate);
-                  }
-               } else {
-                  long maxSegments = Math.round(computeExpectedSegmentsForNode(candidate, actualNumOwners) * OWNED_SEGMENTS_ALLOWED_VARIATION);
-                  if (stats.getOwned(candidate) < maxSegments) {
-                     addOwnerNoCheck(segment, candidate);
-                  }
-               }
-            } else {
-               if (!capacityFactors.get(candidate).equals(0f)) {
-                  addOwnerNoCheck(segment, candidate);
-               }
-            }
+         if (owners.size() >= actualNumOwners || locationAlreadyAdded(candidate, owners, currentLevel)) {
+            return false;
          }
-      }
 
-      @Override
-      protected boolean canAddOwners(List<Address> owners) {
-         return owners.size() < topologyInfo.getDistinctLocationsCount(currentLevel, actualNumOwners);
+         addOwnerNoCheck(segment, candidate, updateStats);
+         return true;
       }
 
       @Override

@@ -2,7 +2,7 @@ package org.infinispan.distribution.topologyaware;
 
 import org.infinispan.distribution.ch.ConsistentHashFactory;
 import org.infinispan.distribution.ch.impl.DefaultConsistentHash;
-import org.infinispan.distribution.ch.impl.TopologyAwareSync3ConsistentHashFactory;
+import org.infinispan.distribution.ch.impl.TopologyAwareSyncConsistentHashFactory;
 import org.infinispan.remoting.transport.Address;
 import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
@@ -30,7 +30,7 @@ public class TopologyAwareSyncConsistentHashFactoryTest extends TopologyAwareCon
 
    @Override
    protected ConsistentHashFactory<DefaultConsistentHash> createConsistentHashFactory() {
-      return new TopologyAwareSync3ConsistentHashFactory();
+      return new TopologyAwareSyncConsistentHashFactory();
    }
 
    @Override
