@@ -290,10 +290,10 @@ public class SyncConsistentHashFactory implements ConsistentHashFactory<DefaultC
             VirtualNode virtualNode = candidatesCopy.poll();
             Address address = virtualNode.address;
             double expectedPrimarySegments = computeExpectedSegmentsForNode(address, 1);
-            int maxPrimary = (int) (expectedPrimarySegments + Math.max(expectedPrimarySegments * PRIMARY_OWNED_SEGMENTS_ALLOWED_VARIATION, 1));
+            int maxPrimary = (int) (Math.max(Math.ceil(expectedPrimarySegments), expectedPrimarySegments * (1 + PRIMARY_OWNED_SEGMENTS_ALLOWED_VARIATION)));
             if (stats.getPrimaryOwned(address) < maxPrimary) {
                double expectedSegments = computeExpectedSegmentsForNode(address, numCopies);
-               int maxSegments = (int) (expectedSegments + Math.max(expectedSegments * OWNED_SEGMENTS_ALLOWED_VARIATION, 1));
+               int maxSegments = (int) (Math.max(Math.ceil(expectedSegments), expectedSegments * (1 + OWNED_SEGMENTS_ALLOWED_VARIATION)));
                if (stats.getOwned(address) < maxSegments) {
                   addOwner(segment, address, false);
                }
@@ -312,7 +312,7 @@ public class SyncConsistentHashFactory implements ConsistentHashFactory<DefaultC
             VirtualNode virtualNode = candidatesCopy.poll();
             Address address = virtualNode.address;
             double expectedSegments = computeExpectedSegmentsForNode(address, numCopies);
-            int maxSegments = (int) (expectedSegments + Math.max(expectedSegments * OWNED_SEGMENTS_ALLOWED_VARIATION, 1));
+            int maxSegments = (int) (Math.max(Math.ceil(expectedSegments), expectedSegments * (1 + OWNED_SEGMENTS_ALLOWED_VARIATION)));
             if (stats.getOwned(address) < maxSegments) {
                addOwner(segment, address, false);
             }

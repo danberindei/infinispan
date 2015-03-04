@@ -16,7 +16,7 @@ public class PessimisticDistTxTest extends PessimisticReplTxTest {
       ConfigurationBuilder builder = super.buildConfiguration();
       builder.clustering()
             .cacheMode(CacheMode.DIST_SYNC)
-            .hash().numOwners(1);
+            .hash().numOwners(1).numSegments(4);
       return builder;
    }
 

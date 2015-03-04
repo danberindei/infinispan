@@ -343,7 +343,7 @@ public class ManualEvictionWithSizeBasedAndConcurrentOperationsInPrimaryOwnerTes
    protected EmbeddedCacheManager createCacheManager() throws Exception {
       ConfigurationBuilder builder = getDefaultStandaloneCacheConfig(false);
       builder.clustering().cacheMode(CacheMode.DIST_SYNC)
-            .hash().numOwners(2).numSegments(2);
+            .hash().numOwners(2).numSegments(4);
       configurePersistence(builder);
       configureEviction(builder);
       return TestCacheManagerFactory.createClusteredCacheManager(builder);

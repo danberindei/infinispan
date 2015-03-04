@@ -26,9 +26,9 @@ public class SyncConsistentHashFactoryTest extends AbstractInfinispanTest {
    // numbers of nodes to test
    public static final int[] NUM_NODES = {10, 50};
    // numbers of virtual nodes to test
-   public static final int[] NUM_SEGMENTS = {128, 256, 512, 1024, 2048, 4096};
+   public static final int[] NUM_SEGMENTS = {1024, 2048};
    // number of key owners
-   public static final int[] NUM_OWNERS = {2, 3, 5};
+   public static final int[] NUM_OWNERS = {2, 3};
 
    // controls precision + duration of test
    public static final int LOOPS = 200;
