@@ -168,8 +168,8 @@ public class TopologyInfo {
    /**
     * The nodes collection must be sorted in descending order by their capacity.
     */
-   private double computeMaxSegmentsForNode(int numSegments, double numCopies, Collection<Address> nodes,
-                                           Address node) {
+   private double computeExpectedSegmentsForNode(int numSegments, double numCopies, Collection<Address> nodes,
+         Address node) {
       if (capacityFactors == null) {
          if (nodes.size() < numCopies) {
             return numSegments;
@@ -216,8 +216,8 @@ public class TopologyInfo {
       return totalCapacity;
    }
 
-   private double computeMaxSegmentsForMachine(int numSegments, double numCopies, Collection<Machine> machines,
-                                              Machine machine, Address node) {
+   private double computeExpectedSegmentsForMachine(int numSegments, double numCopies, Collection<Machine> machines,
+         Machine machine, Address node) {
       // The number of segment copies on each machine should be the same, except where not possible
       double copiesPerMachine = numCopies / machines.size();
       if (machine.nodes.size() <= copiesPerMachine) {
@@ -231,11 +231,11 @@ public class TopologyInfo {
          }
          copiesPerMachine = (numCopies - fullMachines) / (machines.size() - fullMachines);
       }
-      return computeMaxSegmentsForNode(numSegments, copiesPerMachine, machine.nodes, node);
+      return computeExpectedSegmentsForNode(numSegments, copiesPerMachine, machine.nodes, node);
    }
 
-   private double computeMaxSegmentsForRack(int numSegments, double numCopies, Collection<Rack> racks, Rack rack,
-                                           Machine machine, Address node) {
+   private double computeExpectedSegmentsForRack(int numSegments, double numCopies, Collection<Rack> racks, Rack rack,
+         Machine machine, Address node) {
       // Not enough racks to have an owner in each rack.
       // The number of segment copies on each Rack should be the same, except where not possible
       double copiesPerRack = numCopies / racks.size();
@@ -251,14 +251,14 @@ public class TopologyInfo {
          copiesPerRack = (numCopies - fullRacks) / (racks.size() - fullRacks);
       }
       if (copiesPerRack <= 1) {
-         return computeMaxSegmentsForNode(numSegments, copiesPerRack, rack.nodes, node);
+         return computeExpectedSegmentsForNode(numSegments, copiesPerRack, rack.nodes, node);
       } else {
-         return computeMaxSegmentsForMachine(numSegments, copiesPerRack, rack.machines.values(), machine, node);
+         return computeExpectedSegmentsForMachine(numSegments, copiesPerRack, rack.machines.values(), machine, node);
       }
    }
 
-   private double computeMaxSegmentsForSite(int numSegments, double numCopies, Collection<Site> sites,
-                                           Site site, Rack rack, Machine machine, Address node) {
+   private double computeExpectedSegmentsForSite(int numSegments, double numCopies, Collection<Site> sites,
+         Site site, Rack rack, Machine machine, Address node) {
       // Not enough allSites to have an owner in each site.
       // The number of segment copies on each Site should be the same, except where not possible
       double copiesPerSite = numCopies / sites.size();
@@ -275,9 +275,9 @@ public class TopologyInfo {
          copiesPerSite = (numCopies - fullSites) / (sites.size() - fullSites);
       }
       if (copiesPerSite <= 1) {
-         return computeMaxSegmentsForNode(numSegments, copiesPerSite, site.nodes, node);
+         return computeExpectedSegmentsForNode(numSegments, copiesPerSite, site.nodes, node);
       } else {
-         return computeMaxSegmentsForRack(numSegments, copiesPerSite, site.racks.values(), rack, machine, node);
+         return computeExpectedSegmentsForRack(numSegments, copiesPerSite, site.racks.values(), rack, machine, node);
       }
    }
 
@@ -297,15 +297,16 @@ public class TopologyInfo {
 
       double maxSegments;
       if (numOwners == 1) {
-         maxSegments = computeMaxSegmentsForNode(numSegments, numOwners, sortedNodes, node);
+         maxSegments = computeExpectedSegmentsForNode(numSegments, numOwners, sortedNodes, node);
       } else if (getAllNodesCount() <= numOwners) {
          maxSegments = numSegments;
       } else if (getAllMachinesCount() <= numOwners) {
-         maxSegments = computeMaxSegmentsForMachine(numSegments, numOwners, allMachines, machine, node);
+         maxSegments = computeExpectedSegmentsForMachine(numSegments, numOwners, allMachines, machine, node);
       } else if (getAllRacksCount() <= numOwners) {
-         maxSegments = computeMaxSegmentsForRack(numSegments, numOwners, allRacks, rack, machine, node);
+         maxSegments = computeExpectedSegmentsForRack(numSegments, numOwners, allRacks, rack, machine, node);
       } else {
-         maxSegments = computeMaxSegmentsForSite(numSegments, numOwners, allSites.values(), site, rack, machine, node);
+         maxSegments = computeExpectedSegmentsForSite(numSegments, numOwners, allSites.values(), site, rack, machine,
+               node);
       }
       return maxSegments;
    }

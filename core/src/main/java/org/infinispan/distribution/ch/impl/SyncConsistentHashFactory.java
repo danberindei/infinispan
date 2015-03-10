@@ -311,9 +311,7 @@ public class SyncConsistentHashFactory implements ConsistentHashFactory<DefaultC
          while (owners.size() < numCopies && !candidatesCopy.isEmpty()) {
             VirtualNode virtualNode = candidatesCopy.poll();
             Address address = virtualNode.address;
-            double expectedSegments = computeExpectedSegmentsForNode(address, numCopies);
-            int maxSegments = (int) (Math.max(Math.ceil(expectedSegments), expectedSegments * (1 + OWNED_SEGMENTS_ALLOWED_VARIATION)));
-            if (stats.getOwned(address) < maxSegments) {
+            if (checkOwnershipStats(numCopies, address)) {
                addOwner(segment, address, false);
             }
          }
@@ -326,6 +324,12 @@ public class SyncConsistentHashFactory implements ConsistentHashFactory<DefaultC
                addOwner(segment, address, false);
             }
          }
+      }
+
+      protected boolean checkOwnershipStats(int numCopies, Address address) {
+         double expectedSegments = computeExpectedSegmentsForNode(address, numCopies);
+         int maxSegments = (int) (Math.max(Math.ceil(expectedSegments), expectedSegments * (1 + OWNED_SEGMENTS_ALLOWED_VARIATION)));
+         return stats.getOwned(address) < maxSegments;
       }
 
       private VirtualNode findClosestVirtualNode(List<VirtualNode> virtualNodes, int segmentHash) {

@@ -62,6 +62,21 @@ public class TopologyAwareSyncConsistentHashFactory extends SyncConsistentHashFa
          super.addBackupOwnersForSegment(numCopies, segment, candidates, owners);
       }
 
+      protected boolean checkOwnershipStats(int numCopies, Address address) {
+         TopologyAwareAddress topologyAwareAddress = (TopologyAwareAddress) address;
+         double expectedSegments = computeExpectedSegmentsForNode(address, numCopies);
+         int maxSegments = (int) (Math.max(Math.ceil(expectedSegments), expectedSegments * (1 + OWNED_SEGMENTS_ALLOWED_VARIATION)));
+         if (stats.getOwned(address) >= maxSegments)
+            return false;
+
+         String site = topologyAwareAddress.getSiteId();
+         String rack = topologyAwareAddress.getRackId();
+         String machine = topologyAwareAddress.getMachineId();
+         expectedSegments = topologyInfo.computeExpectedSegmentsForMachine(numSegments, numCopies, topologyInfo
+               .getRackMachines(site, rack), machine, address);
+      }
+
+
       @Override
       protected boolean addOwner(int segment, Address candidate, boolean updateStats) {
          List<Address> owners = segmentOwners[segment];
