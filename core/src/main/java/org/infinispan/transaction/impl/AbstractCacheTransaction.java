@@ -12,6 +12,8 @@ import java.util.Set;
 import org.infinispan.commands.write.WriteCommand;
 import org.infinispan.commons.equivalence.Equivalence;
 import org.infinispan.commons.util.CollectionFactory;
+import org.infinispan.commons.util.ImmutableListCopy;
+import org.infinispan.commons.util.Immutables;
 import org.infinispan.commons.util.InfinispanCollections;
 import org.infinispan.container.entries.CacheEntry;
 import org.infinispan.container.versioning.EntryVersion;
@@ -124,7 +126,12 @@ public abstract class AbstractCacheTransaction implements CacheTransaction {
 
    @Override
    public final List<WriteCommand> getAllModifications() {
-      return modifications == null ? InfinispanCollections.<WriteCommand>emptyList() : modifications;
+      if (modifications instanceof ImmutableListCopy)
+         return modifications;
+      else if (modifications == null)
+         return InfinispanCollections.<WriteCommand>emptyList();
+      else
+         return Immutables.immutableListCopy(modifications);
    }
 
    public final void setModifications(List<WriteCommand> modifications) {
@@ -151,6 +158,16 @@ public abstract class AbstractCacheTransaction implements CacheTransaction {
          }
       }
       return false;
+   }
+
+
+   @Override
+   public void freezeModifications() {
+      if (modifications != null) {
+         modifications = Immutables.immutableListCopy(modifications);
+      } else {
+         modifications = InfinispanCollections.emptyList();
+      }
    }
 
    @Override

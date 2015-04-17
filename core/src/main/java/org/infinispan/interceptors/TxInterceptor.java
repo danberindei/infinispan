@@ -113,6 +113,9 @@ public class TxInterceptor extends CommandInterceptor implements JmxStatisticsEx
 
    @Override
    public Object visitPrepareCommand(TxInvocationContext ctx, PrepareCommand command) throws Throwable {
+      // Debugging for ISPN-5379
+      ctx.getCacheTransaction().freezeModifications();
+
       //if it is remote and 2PC then first log the tx only after replying mods
       if (this.statisticsEnabled) prepares.incrementAndGet();
       if (!ctx.isOriginLocal()) {

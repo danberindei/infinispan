@@ -125,4 +125,9 @@ public interface CacheTransaction {
    EntryVersionsMap getVersionsRead();
 
    long getCreationTime();
+
+   /**
+    * Prevent new modifications after prepare or commit started.
+    */
+   void freezeModifications();
 }
