@@ -6,20 +6,28 @@ import org.infinispan.commands.control.LockControlCommand;
 import org.infinispan.commands.tx.CommitCommand;
 import org.infinispan.commands.tx.PrepareCommand;
 import org.infinispan.commands.write.PutKeyValueCommand;
+import org.infinispan.commons.hash.Hash;
 import org.infinispan.configuration.cache.CacheMode;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.context.Flag;
 import org.infinispan.context.InvocationContext;
 import org.infinispan.context.impl.TxInvocationContext;
+import org.infinispan.distribution.ch.ConsistentHashFactory;
+import org.infinispan.distribution.ch.impl.ReplicatedConsistentHash;
+import org.infinispan.distribution.ch.impl.ReplicatedConsistentHashFactory;
 import org.infinispan.interceptors.EntryWrappingInterceptor;
 import org.infinispan.interceptors.base.BaseCustomInterceptor;
 import org.infinispan.manager.EmbeddedCacheManager;
+import org.infinispan.remoting.transport.Address;
 import org.infinispan.test.MultipleCacheManagersTest;
 import org.infinispan.test.fwk.CheckPoint;
 import org.infinispan.test.fwk.CleanupAfterMethod;
 import org.infinispan.topology.CacheTopology;
 import org.testng.annotations.Test;
 
+import java.io.Serializable;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
@@ -53,6 +61,7 @@ public class ReplCommandForwardingTest extends MultipleCacheManagersTest {
       // The coordinator will always be the primary owner
       ConfigurationBuilder configurationBuilder = getDefaultClusteredCacheConfig(mode, transactional);
       if (mode.isSynchronous()) configurationBuilder.clustering().sync().replTimeout(15000);
+      configurationBuilder.clustering().hash().consistentHashFactory(new ControlledReplicatedConsistentHashFactory());
       configurationBuilder.clustering().stateTransfer().fetchInMemoryState(true);
       configurationBuilder.transaction().syncCommitPhase(false);
       // We must block after the commit was replicated, but before the entries are committed
@@ -68,20 +77,21 @@ public class ReplCommandForwardingTest extends MultipleCacheManagersTest {
       int initialTopologyId = extractComponent(c1, StateTransferManager.class).getCacheTopology().getTopologyId();
 
       EmbeddedCacheManager cm2 = addClusterEnabledCacheManager(buildConfig(false, false, PutKeyValueCommand.class));
-      Cache<Object, Object> c2 = cm2.getCache();
+      final Cache<Object, Object> c2 = cm2.getCache();
       DelayInterceptor di2 = findInterceptor(c2, DelayInterceptor.class);
       waitForStateTransfer(initialTopologyId + 2, c1, c2);
 
+      // If we started the transaction on c1, blocking the command on c2 would also block the installation of new views
       Future<Object> f = fork(new Callable<Object>() {
          @Override
          public Object call() throws Exception {
-            log.tracef("Initiating a put command on %s", c1);
-            c1.put("k", "v");
+            log.tracef("Initiating a put command on %s", c2);
+            c2.put("k", "v");
             return null;
          }
       });
 
-      // The put command is replicated to cache c2, and it blocks in the DelayInterceptor on both c1 and c2.
+      // The put command is replicated to cache c1, and it blocks in the DelayInterceptor on both c1 and c2.
       di1.waitUntilBlocked(1);
       di2.waitUntilBlocked(1);
 
@@ -129,20 +139,20 @@ public class ReplCommandForwardingTest extends MultipleCacheManagersTest {
       int initialTopologyId = extractComponent(c1, StateTransferManager.class).getCacheTopology().getTopologyId();
 
       EmbeddedCacheManager cm2 = addClusterEnabledCacheManager(buildConfig(true, onePhase, commandToBlock));
-      Cache c2 = cm2.getCache();
+      final Cache c2 = cm2.getCache();
       DelayInterceptor di2 = findInterceptor(c2, DelayInterceptor.class);
       waitForStateTransfer(initialTopologyId + 2, c1, c2);
 
       Future<Object> f = fork(new Callable<Object>() {
          @Override
          public Object call() throws Exception {
-            log.tracef("Initiating a transaction on %s", c1);
-            c1.put("k", "v");
+            log.tracef("Initiating a transaction on %s", c2);
+            c2.put("k", "v");
             return null;
          }
       });
 
-      // The prepare command is replicated to cache c2, and it blocks in the DelayInterceptor on c1 and c2
+      // The prepare command is replicated to cache c1, and it blocks in the DelayInterceptor on c1 and c2
       di1.waitUntilBlocked(1);
       di2.waitUntilBlocked(1);
 
@@ -152,11 +162,11 @@ public class ReplCommandForwardingTest extends MultipleCacheManagersTest {
       DelayInterceptor di3 = findInterceptor(c3, DelayInterceptor.class);
       waitForStateTransfer(initialTopologyId + 4, c1, c2, c3);
 
-      // Unblock the replicated command on c2.
-      // The StateTransferInterceptor on c2 will forward the command to c3.
+      // Unblock the replicated command on c1.
+      // The StateTransferInterceptor on c1 will forward the command to c3.
       // The DelayInterceptor on c3 will then block, waiting for an unblock() call.
-      log.tracef("Forwarding the prepare command from %s", c2);
-      di2.unblock(1);
+      log.tracef("Forwarding the prepare command from %s", c1);
+      di1.unblock(1);
       di3.waitUntilBlocked(1);
 
       // c4 joins, topology id changes
@@ -166,37 +176,38 @@ public class ReplCommandForwardingTest extends MultipleCacheManagersTest {
       waitForStateTransfer(initialTopologyId + 6, c1, c2, c3, c4);
 
       // Unblock the forwarded command on c3.
-      // StateTransferInterceptor will then forward the command to c2 and c4.
+      // StateTransferInterceptor will then forward the command to c1 and c4.
       log.tracef("Forwarding the prepare command from %s", c3);
       di3.unblock(1);
 
-      // Check that the c2 and c4 received the forwarded command.
+      // Check that the c1 and c4 received the forwarded command.
       if (onePhase) {
          // Commit command would not execute a second time, because the remote tx was removed
-         di2.unblock(2);
+         di1.unblock(2);
       }
       di4.unblock(1);
 
-      // Allow the command to proceed on the originator (c1).
-      // StateTransferInterceptor will forward the command to c2, c3, and c4.
-      log.tracef("Forwarding the prepare command from %s", c1);
-      di1.unblock(1);
+      // Allow the command to proceed on the originator (c2).
+      // StateTransferInterceptor will forward the command to c1, c3, and c4.
+      log.tracef("Forwarding the prepare command from %s", c2);
+      di2.unblock(1);
 
       // Check that c2, c3, and c4 received the forwarded command.
       if (onePhase) {
-         di2.unblock(3);
+         di1.unblock(3);
          di3.unblock(2);
          di4.unblock(2);
       }
 
-      log.tracef("Waiting for the transaction to finish on %s", c1);
+      log.tracef("Waiting for the transaction to finish on %s", c2);
       f.get(10, SECONDS);
-      log.tracef("Transaction finished on %s", c1);
+      log.tracef("Transaction finished on %s", c2);
 
       if (onePhase) {
-         assertEquals(di1.getCounter(), 1);
          // 1 from replication + 1 re-forwarded by C + 1 forwarded by A
-         assertEquals(di2.getCounter(), 3);
+         assertEquals(di1.getCounter(), 3);
+         // 1 from the invocation
+         assertEquals(di2.getCounter(), 1);
          // 1 forwarded by B + 1 forwarded by A
          assertEquals(di3.getCounter(), 2);
          // 1 re-1forwarded by C + 1 forwarded by A
@@ -216,6 +227,31 @@ public class ReplCommandForwardingTest extends MultipleCacheManagersTest {
          CacheTopology cacheTopology = extractComponent(c, StateTransferManager.class).getCacheTopology();
          assertEquals(String.format("Wrong topology on cache %s, expected %d and got %s", c, expectedTopologyId,
                cacheTopology), cacheTopology.getTopologyId(), expectedTopologyId);
+      }
+   }
+
+   private static class ControlledReplicatedConsistentHashFactory implements ConsistentHashFactory<ReplicatedConsistentHash>, Serializable {
+      private final ReplicatedConsistentHashFactory replicatedConsistentHashFactory = new ReplicatedConsistentHashFactory();
+
+      @Override
+      public ReplicatedConsistentHash create(Hash hashFunction, int numOwners, int numSegments, List<Address> members, Map<Address, Float> capacityFactors) {
+         int[] primaryOwners = members.size() >= 2 ? new int[]{1} : new int[]{0};
+         return new ReplicatedConsistentHash(hashFunction, members, primaryOwners);
+      }
+
+      @Override
+      public ReplicatedConsistentHash updateMembers(ReplicatedConsistentHash baseCH, List<Address> newMembers, Map<Address, Float> capacityFactors) {
+         return create(baseCH.getHashFunction(), baseCH.getNumOwners(), baseCH.getNumSegments(), newMembers, capacityFactors);
+      }
+
+      @Override
+      public ReplicatedConsistentHash rebalance(ReplicatedConsistentHash baseCH) {
+         return baseCH;
+      }
+
+      @Override
+      public ReplicatedConsistentHash union(ReplicatedConsistentHash ch1, ReplicatedConsistentHash ch2) {
+         return replicatedConsistentHashFactory.union(ch1, ch2);
       }
    }
 
