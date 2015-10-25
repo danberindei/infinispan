@@ -7,6 +7,11 @@ import org.infinispan.remoting.transport.Address;
  * @since 4.2
  */
 public class TestAddress implements Address {
+   public static TestAddress A = new TestAddress(1, "A");
+   public static TestAddress B = new TestAddress(2, "B");
+   public static TestAddress C = new TestAddress(3, "C");
+   public static TestAddress D = new TestAddress(4, "D");
+
    final int addressNum;
 
    String name;
