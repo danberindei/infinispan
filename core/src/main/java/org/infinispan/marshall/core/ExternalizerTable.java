@@ -281,7 +281,6 @@ public class ExternalizerTable implements ObjectTable {
       addInternalExternalizer(new RecoveryAwareDldGlobalTransaction.Externalizer());
       addInternalExternalizer(new JGroupsAddress.Externalizer());
       addInternalExternalizer(new ImmutableListCopy.Externalizer());
-      addInternalExternalizer(new Immutables.ImmutableMapWrapperExternalizer());
       addInternalExternalizer(new MarshalledValue.Externalizer(globalMarshaller));
       addInternalExternalizer(new ByteBufferImpl.Externalizer());
 
@@ -405,7 +404,6 @@ public class ExternalizerTable implements ObjectTable {
       addInternalExternalizer(new EquivalenceExternalizer());
       addInternalExternalizer(new QueueExternalizers());
       addInternalExternalizer(new UuidExternalizer());
-      addInternalExternalizer(new Immutables.ImmutableSetWrapperExternalizer());
    }
 
    void addInternalExternalizer(AdvancedExternalizer<?> ext) {

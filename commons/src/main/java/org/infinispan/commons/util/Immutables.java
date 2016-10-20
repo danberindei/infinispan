@@ -5,15 +5,12 @@ import java.io.InputStream;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.Reader;
-import java.io.Serializable;
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.InvalidPropertiesFormatException;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -22,7 +19,6 @@ import java.util.Set;
 
 import org.infinispan.commons.marshall.AbstractExternalizer;
 import org.infinispan.commons.marshall.Ids;
-import org.infinispan.commons.marshall.MarshallUtil;
 
 
 /**
@@ -153,7 +149,7 @@ public class Immutables {
     * @return an immutable set wrapper that delegates to the original set
     */
    public static <T> Set<T> immutableSetWrap(Set<? extends T> set) {
-      return new ImmutableSetWrapper<T>(set);
+      return Collections.unmodifiableSet(set);
    }
 
    /**
@@ -173,7 +169,7 @@ public class Immutables {
       if (copy == null)
          copy = new HashSet<T>(set);
 
-      return new ImmutableSetWrapper<T>(copy);
+      return Collections.unmodifiableSet(copy);
    }
 
 
@@ -184,7 +180,7 @@ public class Immutables {
     * @return an immutable map wrapper that delegates to the original map
     */
    public static <K, V> Map<K, V> immutableMapWrap(Map<? extends K, ? extends V> map) {
-      return new ImmutableMapWrapper<K, V>(map);
+      return Collections.unmodifiableMap(map);
    }
 
    /**
@@ -208,7 +204,7 @@ public class Immutables {
       if (copy == null)
          copy = new HashMap<K, V>(map);
 
-      return new ImmutableMapWrapper<K, V>(copy);
+      return Collections.unmodifiableMap(copy);
    }
 
    /**
@@ -228,7 +224,7 @@ public class Immutables {
       if (copy == null)
          copy = new ArrayList<T>(collection);
 
-      return new ImmutableCollectionWrapper<T>(copy);
+      return Collections.unmodifiableCollection(copy);
    }
 
    /**
@@ -238,7 +234,7 @@ public class Immutables {
     * @return an immutable collection wrapper that delegates to the original collection
     */
    public static <T> Collection<T> immutableCollectionWrap(Collection<? extends T> collection) {
-      return new ImmutableCollectionWrapper<T>(collection);
+      return Collections.unmodifiableCollection(collection);
    }
 
    @SuppressWarnings("unchecked")
@@ -282,119 +278,6 @@ public class Immutables {
     * We have to re-implement Collections.unmodifiableXXX, since it is not
     * simple to detect them (the class names are JDK dependent).
     */
-
-   private static class ImmutableIteratorWrapper<E> implements Iterator<E> {
-      private Iterator<? extends E> iterator;
-
-      public ImmutableIteratorWrapper(Iterator<? extends E> iterator) {
-         this.iterator = iterator;
-      }
-
-      @Override
-      public boolean hasNext() {
-         return iterator.hasNext();
-      }
-
-      @Override
-      public E next() {
-         return iterator.next();
-      }
-
-      @Override
-      public void remove() {
-         throw new UnsupportedOperationException();
-      }
-   }
-
-   private static class ImmutableCollectionWrapper<E> implements Collection<E>, Serializable, Immutable {
-      private static final long serialVersionUID = 6777564328198393535L;
-
-      Collection<? extends E> collection;
-
-      public ImmutableCollectionWrapper(Collection<? extends E> collection) {
-         this.collection = collection;
-      }
-
-      @Override
-      public boolean add(E o) {
-         throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public boolean addAll(Collection<? extends E> c) {
-         throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public void clear() {
-         throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public boolean contains(Object o) {
-         return collection.contains(o);
-      }
-
-      @Override
-      public boolean containsAll(Collection<?> c) {
-         return collection.containsAll(c);
-      }
-
-      @Override
-      public boolean equals(Object o) {
-         return collection.equals(o);
-      }
-
-      @Override
-      public int hashCode() {
-         return collection.hashCode();
-      }
-
-      @Override
-      public boolean isEmpty() {
-         return collection.isEmpty();
-      }
-
-      @Override
-      public Iterator<E> iterator() {
-         return new ImmutableIteratorWrapper<E>(collection.iterator());
-      }
-
-      @Override
-      public boolean remove(Object o) {
-         throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public boolean removeAll(Collection<?> c) {
-         throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public boolean retainAll(Collection<?> c) {
-         throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public int size() {
-         return collection.size();
-      }
-
-      @Override
-      public Object[] toArray() {
-         return collection.toArray();
-      }
-
-      @Override
-      public <T> T[] toArray(T[] a) {
-         return collection.toArray(a);
-      }
-
-      @Override
-      public String toString() {
-         return collection.toString();
-      }
-   }
 
    /**
     * Immutable version of Map.Entry for traversing immutable collections.
@@ -481,202 +364,6 @@ public class Immutables {
       }
    }
 
-   private static class ImmutableSetWrapper<E> extends ImmutableCollectionWrapper<E> implements Set<E>, Serializable, Immutable {
-      private static final long serialVersionUID = 7991492805176142615L;
-
-      public ImmutableSetWrapper(Set<? extends E> set) {
-         super(set);
-      }
-   }
-
-   private static class ImmutableReversibleOrderedSetWrapper<E> extends ImmutableCollectionWrapper<E> implements ReversibleOrderedSet<E>, Serializable, Immutable {
-      private static final long serialVersionUID = 7991492805176142615L;
-
-      public ImmutableReversibleOrderedSetWrapper(Set<? extends E> set) {
-         super(set);
-      }
-
-      @Override
-      public Iterator<E> reverseIterator() {
-         return new ImmutableIteratorWrapper<E>(((ReversibleOrderedSet<? extends E>) collection).reverseIterator());
-      }
-   }
-
-   private static class ImmutableEntrySetWrapper<K, V> extends ImmutableSetWrapper<Entry<K, V>> {
-      private static final long serialVersionUID = 6378667653889667692L;
-
-      @SuppressWarnings("unchecked")
-      public ImmutableEntrySetWrapper(Set<? extends Entry<? extends K, ? extends V>> set) {
-         super((Set<Entry<K, V>>) set);
-      }
-
-      @Override
-      public Object[] toArray() {
-         Object[] array = new Object[collection.size()];
-         int i = 0;
-         for (Entry<K, V> entry : this)
-            array[i++] = entry;
-         return array;
-      }
-
-      @Override
-      @SuppressWarnings("unchecked")
-      public <T> T[] toArray(T[] array) {
-         int size = collection.size();
-         if (array.length < size)
-            array = (T[]) Array.newInstance(array.getClass().getComponentType(), size);
-
-         int i = 0;
-         Object[] result = array;
-         for (Entry<K, V> entry : this)
-            result[i++] = entry;
-
-         return array;
-      }
-
-      @Override
-      public Iterator<Entry<K, V>> iterator() {
-         return new ImmutableIteratorWrapper<Entry<K, V>>(collection.iterator()) {
-            @Override
-            public Entry<K, V> next() {
-               return new ImmutableEntry<K, V>(super.next());
-            }
-         };
-      }
-   }
-
-   public static class ImmutableSetWrapperExternalizer extends AbstractExternalizer<Set> {
-      @Override
-      public void writeObject(ObjectOutput output, Set set) throws IOException {
-         MarshallUtil.marshallCollection(set, output);
-      }
-
-      @Override
-      public Set readObject(ObjectInput input) throws IOException, ClassNotFoundException {
-         Set<Object> set = MarshallUtil.unmarshallCollection(input, HashSet::new);
-         return Immutables.immutableSetWrap(set);
-      }
-
-      @Override
-      public Integer getId() {
-         return Ids.IMMUTABLE_SET;
-      }
-
-      @Override
-      @SuppressWarnings("unchecked")
-      public Set<Class<? extends Set>> getTypeClasses() {
-         return Util.<Class<? extends Set>>asSet(ImmutableSetWrapper.class);
-      }
-   }
-
-   private static class ImmutableMapWrapper<K, V> implements Map<K, V>, Serializable, Immutable {
-      private static final long serialVersionUID = 708144227046742221L;
-
-      private Map<? extends K, ? extends V> map;
-
-      public ImmutableMapWrapper(Map<? extends K, ? extends V> map) {
-         this.map = map;
-      }
-
-      @Override
-      public void clear() {
-         throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public boolean containsKey(Object key) {
-         return map.containsKey(key);
-      }
-
-      @Override
-      public boolean containsValue(Object value) {
-         return map.containsValue(value);
-      }
-
-      @Override
-      public Set<Entry<K, V>> entrySet() {
-         return new ImmutableEntrySetWrapper<K, V>(map.entrySet());
-      }
-
-      @Override
-      public boolean equals(Object o) {
-         return map.equals(o);
-      }
-
-      @Override
-      public V get(Object key) {
-         return map.get(key);
-      }
-
-      @Override
-      public int hashCode() {
-         return map.hashCode();
-      }
-
-      @Override
-      public boolean isEmpty() {
-         return map.isEmpty();
-      }
-
-      @Override
-      public Set<K> keySet() {
-         return new ImmutableSetWrapper<K>(map.keySet());
-      }
-
-      @Override
-      public V put(K key, V value) {
-         throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public void putAll(Map<? extends K, ? extends V> t) {
-         throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public V remove(Object key) {
-         throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public int size() {
-         return map.size();
-      }
-
-      @Override
-      public Collection<V> values() {
-         return new ImmutableCollectionWrapper<V>(map.values());
-      }
-
-      @Override
-      public String toString() {
-         return map.toString();
-      }
-   }
-
-   public static class ImmutableMapWrapperExternalizer extends AbstractExternalizer<Map> {
-      @Override
-      public void writeObject(ObjectOutput output, Map map) throws IOException {
-         MarshallUtil.marshallMap(map, output);
-      }
-
-      @Override
-      public Map readObject(ObjectInput input) throws IOException, ClassNotFoundException {
-         return Immutables.immutableMapWrap(MarshallUtil.unmarshallMap(input, HashMap::new));
-      }
-
-      @Override
-      public Integer getId() {
-         return Ids.IMMUTABLE_MAP;
-      }
-
-      @Override
-      @SuppressWarnings("unchecked")
-      public Set<Class<? extends Map>> getTypeClasses() {
-         return Util.<Class<? extends Map>>asSet(ImmutableMapWrapper.class);
-      }
-   }
-
    private static class ImmutableTypedProperties extends TypedProperties {
 
       ImmutableTypedProperties(TypedProperties properties) {
@@ -693,12 +380,12 @@ public class Immutables {
 
       @Override
       public Set<java.util.Map.Entry<Object, Object>> entrySet() {
-         return new ImmutableEntrySetWrapper<Object, Object>(super.entrySet());
+         return Collections.unmodifiableSet(super.entrySet());
       }
 
       @Override
       public Set<Object> keySet() {
-         return new ImmutableSetWrapper<Object>(super.keySet());
+         return Collections.unmodifiableSet(super.keySet());
       }
 
       @Override
@@ -738,12 +425,12 @@ public class Immutables {
 
       @Override
       public Set<String> stringPropertyNames() {
-         return new ImmutableSetWrapper<String>(super.stringPropertyNames());
+         return Collections.unmodifiableSet(super.stringPropertyNames());
       }
 
       @Override
       public Collection<Object> values() {
-         return new ImmutableCollectionWrapper<Object>(super.values());
+         return Collections.unmodifiableCollection(super.values());
       }
 
    }
