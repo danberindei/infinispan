@@ -12,7 +12,6 @@ import org.infinispan.factories.annotations.Inject;
 import org.infinispan.remoting.responses.CacheNotFoundResponse;
 import org.infinispan.remoting.responses.ExceptionResponse;
 import org.infinispan.statetransfer.OutdatedTopologyException;
-import org.infinispan.statetransfer.StateRequestCommand;
 import org.infinispan.transaction.impl.TotalOrderRemoteTransactionState;
 import org.infinispan.transaction.totalorder.TotalOrderLatch;
 import org.infinispan.transaction.totalorder.TotalOrderManager;
@@ -36,8 +35,7 @@ public class TotalOrderTxPerCacheInboundInvocationHandler extends BasePerCacheIn
    @Override
    public void handle(CacheRpcCommand command, Reply reply, DeliverOrder order) {
       try {
-         final int commandTopologyId = extractCommandTopologyId(command);
-         if (isCommandSentBeforeFirstTopology(commandTopologyId)) {
+         if (isCommandSentBeforeFirstTopology(command)) {
             reply.reply(CacheNotFoundResponse.INSTANCE);
             return;
          }
@@ -66,8 +64,8 @@ public class TotalOrderTxPerCacheInboundInvocationHandler extends BasePerCacheIn
                break;
             default:
                onExecutorService = executeOnExecutorService(order, command);
-               runnable = createDefaultRunnable(command, reply, commandTopologyId,
-                     command.getCommandId() != StateRequestCommand.COMMAND_ID, onExecutorService, sync);
+               runnable = createDefaultRunnable(command, reply,
+                                                sync);
                break;
          }
          handleRunnable(runnable, onExecutorService);

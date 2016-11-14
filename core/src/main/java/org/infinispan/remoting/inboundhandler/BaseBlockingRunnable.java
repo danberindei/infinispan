@@ -2,6 +2,7 @@ package org.infinispan.remoting.inboundhandler;
 
 import org.infinispan.IllegalLifecycleStateException;
 import org.infinispan.commands.remote.CacheRpcCommand;
+import org.infinispan.persistence.modifications.Remove;
 import org.infinispan.remoting.responses.CacheNotFoundResponse;
 import org.infinispan.remoting.responses.Response;
 import org.infinispan.statetransfer.OutdatedTopologyException;
@@ -43,13 +44,10 @@ public abstract class BaseBlockingRunnable implements BlockingRunnable {
 
    private void runSync() {
       try {
-         CompletableFuture<Response> beforeFuture = beforeInvoke();
-         if (beforeFuture != null) {
-            response = beforeFuture.join();
-            if (response != null) {
-               afterInvoke();
-               return;
-            }
+         response = beforeInvoke();
+         if (response != null) {
+               afterInvoke();return;
+
          }
          CompletableFuture<Response> commandFuture = handler.invokeCommand(command);
          response = commandFuture.join();
@@ -66,30 +64,15 @@ public abstract class BaseBlockingRunnable implements BlockingRunnable {
    }
 
    private void runAsync() {
-      CompletableFuture<Response> beforeFuture = beforeInvoke();
-      if (beforeFuture == null) {
+      response = beforeInvoke();
+      if (response == null) {
          invoke();
       } else {
-         beforeFuture.whenComplete((rsp, throwable) -> {
-            if (rsp != null) {
-               response = rsp;
-               afterInvoke();
-               if (handler.isStopped()) {
-                  response = rsp = CacheNotFoundResponse.INSTANCE;
-               }
-               reply.reply(rsp);
-               onFinally();
-            } else if (throwable != null) {
-               afterCommandException(unwrap(throwable));
-               if (handler.isStopped()) {
-                  response = CacheNotFoundResponse.INSTANCE;
-               }
-               reply.reply(response);
-               onFinally();
-            } else {
-               invoke();
-            }
-         });
+         if (handler.isStopped()) {
+            response = CacheNotFoundResponse.INSTANCE;
+         }
+         reply.reply(response);
+         onFinally();
       }
    }
 
@@ -156,7 +139,7 @@ public abstract class BaseBlockingRunnable implements BlockingRunnable {
       //no-op by default
    }
 
-   protected CompletableFuture<Response> beforeInvoke() {
+   protected Response beforeInvoke() {
       return null; //no-op by default
    }
 

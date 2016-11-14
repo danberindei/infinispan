@@ -153,12 +153,13 @@ public abstract class BasePerCacheInboundInvocationHandler implements PerCacheIn
       return false;
    }
 
-   final BlockingRunnable createDefaultRunnable(CacheRpcCommand command, Reply reply, int commandTopologyId,
-         boolean waitTransactionalData, boolean onExecutorService,
-         boolean sync) {
-      return new DefaultTopologyRunnable(this, command, reply,
-                                         TopologyMode.create(onExecutorService, waitTransactionalData),
-                                         commandTopologyId, sync);
+   protected boolean isCommandSentBeforeFirstTopology(CacheRpcCommand command) {
+      final int commandTopologyId = extractCommandTopologyId(command);
+      return isCommandSentBeforeFirstTopology(commandTopologyId);
+   }
+
+   protected final BlockingRunnable createDefaultRunnable(CacheRpcCommand command, Reply reply, boolean sync) {
+      return new DefaultTopologyRunnable(this, command, reply, sync);
    }
 
    final BlockingRunnable createDefaultRunnable(final CacheRpcCommand command, final Reply reply,

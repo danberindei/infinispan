@@ -9,11 +9,10 @@ import org.infinispan.factories.annotations.Inject;
 import org.infinispan.factories.annotations.Start;
 import org.infinispan.interceptors.locking.ClusteringDependentLogic;
 import org.infinispan.remoting.inboundhandler.action.ActionState;
-import org.infinispan.remoting.inboundhandler.action.CheckTopologyAction;
 import org.infinispan.remoting.inboundhandler.action.DefaultReadyAction;
 import org.infinispan.remoting.inboundhandler.action.LockAction;
 import org.infinispan.remoting.inboundhandler.action.ReadyAction;
-import org.infinispan.statetransfer.StateRequestCommand;
+import org.infinispan.remoting.responses.CacheNotFoundResponse;
 import org.infinispan.util.concurrent.BlockingRunnable;
 import org.infinispan.util.concurrent.locks.LockListener;
 import org.infinispan.util.concurrent.locks.LockManager;
@@ -35,16 +34,12 @@ public class NonTotalOrderPerCacheInboundInvocationHandler extends BasePerCacheI
    private static final Log log = LogFactory.getLog(NonTotalOrderPerCacheInboundInvocationHandler.class);
    private static final boolean trace = log.isTraceEnabled();
 
-   private final CheckTopologyAction checkTopologyAction;
-
    @Inject private LockManager lockManager;
    @Inject private ClusteringDependentLogic clusteringDependentLogic;
-
    private long lockTimeout;
    private boolean isLocking;
 
    public NonTotalOrderPerCacheInboundInvocationHandler() {
-      checkTopologyAction = new CheckTopologyAction(this);
    }
 
    @Start
@@ -59,21 +54,22 @@ public class NonTotalOrderPerCacheInboundInvocationHandler extends BasePerCacheI
          unexpectedDeliverMode(command, order);
       }
       try {
-         final int commandTopologyId = extractCommandTopologyId(command);
+         if (isCommandSentBeforeFirstTopology(command)) {
+            reply.reply(CacheNotFoundResponse.INSTANCE);
+            return;
+         }
+
          final boolean onExecutorService = executeOnExecutorService(order, command);
          final boolean sync = order.preserveOrder();
          final BlockingRunnable runnable;
 
          switch (command.getCommandId()) {
             case SingleRpcCommand.COMMAND_ID:
-               runnable = onExecutorService ?
-                     createReadyActionRunnable(command, reply, commandTopologyId, sync,
-                           createReadyAction(commandTopologyId, (SingleRpcCommand) command)) :
-                     createDefaultRunnable(command, reply, commandTopologyId, TopologyMode.WAIT_TX_DATA, sync);
+               runnable =
+                     createReadyActionRunnable(command, reply, onExecutorService, sync, createReadyAction( (SingleRpcCommand) command)) ;
                break;
             default:
-               runnable = createDefaultRunnable(command, reply, commandTopologyId,
-                     command.getCommandId() != StateRequestCommand.COMMAND_ID, onExecutorService, sync);
+               runnable = createDefaultRunnable(command, reply, sync);
                break;
          }
          handleRunnable(runnable, onExecutorService);
@@ -97,6 +93,34 @@ public class NonTotalOrderPerCacheInboundInvocationHandler extends BasePerCacheI
       return trace;
    }
 
+   private BlockingRunnable createReadyActionRunnable(CacheRpcCommand command, Reply reply, boolean onExecutorService,
+         boolean sync, ReadyAction readyAction) {
+      if (onExecutorService && readyAction != null) {
+         readyAction.addListener(remoteCommandsExecutor::checkForReadyTasks);
+         return new DefaultTopologyRunnable(this, command, reply, sync) {
+            @Override
+            public boolean isReady() {
+               return super.isReady() && readyAction.isReady();
+            }
+
+            @Override
+            protected void onException(Throwable throwable) {
+               super.onException(throwable);
+               readyAction.onException();
+            }
+
+            @Override
+            protected void onFinally() {
+               super.onFinally();
+               readyAction.onFinally();
+            }
+         };
+      } else {
+         return new DefaultTopologyRunnable(this, command, reply, sync);
+      }
+   }
+
+   private ReadyAction createReadyAction(RemoteLockCommand command) {
    private ReadyAction createReadyAction(int topologyId, RemoteLockCommand command) {
       if (command.hasSkipLocking() || !isLocking) {
          return null;
@@ -107,17 +131,17 @@ public class NonTotalOrderPerCacheInboundInvocationHandler extends BasePerCacheI
       }
       final long timeoutMillis = command.hasZeroLockAcquisition() ? 0 : lockTimeout;
 
-      DefaultReadyAction action = new DefaultReadyAction(new ActionState(command, topologyId, timeoutMillis),
-            checkTopologyAction,
-            new LockAction(lockManager, clusteringDependentLogic));
+      DefaultReadyAction action = new DefaultReadyAction(new ActionState(command,  timeoutMillis),
+
+                                                         new LockAction(lockManager, clusteringDependentLogic));
       action.registerListener();
       return action;
    }
 
-   private ReadyAction createReadyAction(int topologyId, SingleRpcCommand singleRpcCommand) {
+   private ReadyAction createReadyAction(SingleRpcCommand singleRpcCommand) {
       ReplicableCommand command = singleRpcCommand.getCommand();
       return command instanceof RemoteLockCommand ?
-            createReadyAction(topologyId, (RemoteLockCommand & ReplicableCommand) command) :
+            createReadyAction((RemoteLockCommand & ReplicableCommand) command) :
             null;
    }
 }
