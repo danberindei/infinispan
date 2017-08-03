@@ -79,7 +79,7 @@ public abstract class AbstractInfinispanTest {
 
    private final ThreadFactory defaultThreadFactory = getTestThreadFactory("ForkThread");
    private final ThreadPoolExecutor testExecutor = new ThreadPoolExecutor(0, Integer.MAX_VALUE,
-                                                                          60L, TimeUnit.SECONDS,
+                                                                          0, TimeUnit.SECONDS,
                                                                           new SynchronousQueue<>(),
                                                                           defaultThreadFactory);
    public static final TimeService TIME_SERVICE = new EmbeddedTimeService();
@@ -527,9 +527,9 @@ public abstract class AbstractInfinispanTest {
             T result = c.call();
             log.debug("Exiting fork callable.");
             return result;
-         } catch (Exception e) {
-            log.warn("Exiting fork callable due to exception", e);
-            throw e;
+         } catch (Throwable t) {
+            log.warn("Exiting fork callable due to exception", t);
+            throw t;
          }
       }
    }
