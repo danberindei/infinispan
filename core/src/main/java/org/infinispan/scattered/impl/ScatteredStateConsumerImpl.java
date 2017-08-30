@@ -48,6 +48,7 @@ import org.infinispan.scattered.ScatteredVersionManager;
 import org.infinispan.statetransfer.InboundTransferTask;
 import org.infinispan.statetransfer.StateConsumerImpl;
 import org.infinispan.statetransfer.StateRequestCommand;
+import org.infinispan.statetransfer.StateTransfer;
 import org.infinispan.topology.CacheTopology;
 import org.infinispan.util.ReadOnlyDataContainerBackedKeySet;
 import org.infinispan.util.logging.Log;
@@ -134,7 +135,8 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
    }
 
    @Override
-   protected void handleSegments(boolean startRebalance, IntSet addedSegments, IntSet removedSegments) {
+   protected void handleSegments(boolean startRebalance, IntSet addedSegments, IntSet removedSegments,
+                                 StateTransfer currentStateTransfer) {
       if (!startRebalance) {
          log.trace("This is not a rebalance, not doing anything...");
          return;
@@ -144,7 +146,7 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
          return;
       }
 
-      synchronized (transferMapsLock) {
+      synchronized (currentStateTransfer.transferMapsLock) {
          inboundSegments = IntSets.mutableFrom(addedSegments);
       }
       chunkCounter.set(0);
@@ -153,7 +155,7 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
 
       StateRequestCommand command = commandsFactory.buildStateRequestCommand(
             StateRequestCommand.Type.CONFIRM_REVOKED_SEGMENTS,
-            rpcManager.getAddress(), cacheTopology.getTopologyId(), addedSegments);
+            rpcManager.getAddress(), currentStateTransfer.cacheTopology.getTopologyId(), addedSegments);
             // we need to wait synchronously for the completion
       rpcManager.blocking(
             rpcManager.invokeCommandOnAll(command, MapResponseCollector.ignoreLeavers(),
@@ -161,7 +163,7 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
          if (throwable == null) {
             try {
                svm.startKeyTransfer(addedSegments);
-               requestKeyTransfer(addedSegments);
+               requestKeyTransfer(addedSegments, currentStateTransfer);
             } catch (Throwable t) {
                log.failedToRequestSegments(cacheName, null, addedSegments, t);
             }
@@ -180,11 +182,11 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
       }));
    }
 
-   private void requestKeyTransfer(IntSet segments) {
+   private void requestKeyTransfer(IntSet segments, StateTransfer currentStateTransfer) {
       boolean isTransferringKeys = false;
 
-      synchronized (transferMapsLock) {
-         List<Address> members = new ArrayList<>(cacheTopology.getActualMembers());
+      synchronized (currentStateTransfer.transferMapsLock) {
+         List<Address> members = new ArrayList<>(currentStateTransfer.cacheTopology.getActualMembers());
          // Reorder the member set to distibute load more evenly
          Collections.shuffle(members);
          for (Address source : members) {
@@ -193,12 +195,14 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
             }
             isTransferringKeys = true;
             InboundTransferTask inboundTransfer = new InboundTransferTask(segments, source,
-                  cacheTopology.getTopologyId(), rpcManager, commandsFactory,
-                  configuration.clustering().stateTransfer().timeout(), cacheName, true);
-            addTransfer(inboundTransfer, segments);
+                                                                          currentStateTransfer.cacheTopology.getTopologyId(),
+                                                                          rpcManager, commandsFactory,
+                                                                          configuration.clustering().stateTransfer().timeout(), cacheName, true);
+            currentStateTransfer.addTransfer(inboundTransfer, segments);
             stateRequestExecutor.executeAsync(() -> {
                log.tracef("Requesting keys for segments %s from %s", inboundTransfer.getSegments(), inboundTransfer.getSource());
-               return inboundTransfer.requestKeys().whenComplete((nil, e) -> onTaskCompletion(inboundTransfer));
+               return inboundTransfer.requestKeys().whenComplete((nil, e) -> onTaskCompletion(inboundTransfer,
+                                                                                              currentStateTransfer));
             });
          }
       }
@@ -212,16 +216,17 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
    }
 
    @Override
-   protected void onTaskCompletion(InboundTransferTask inboundTransfer) {
+   protected void onTaskCompletion(InboundTransferTask inboundTransfer,
+                                   StateTransfer currentStateTransfer) {
       // a bit of overkill since we start these tasks for single segment
       IntSet completedSegments = IntSets.immutableEmptySet();
       if (trace) log.tracef("Inbound transfer finished %s: %s", inboundTransfer,
             inboundTransfer.isCompletedSuccessfully() ? "successfully" : "unsuccessfuly");
-      synchronized (transferMapsLock) {
+      synchronized (currentStateTransfer.transferMapsLock) {
          // transferMapsLock is held when all the tasks are added so we see that all of them are done
          for (PrimitiveIterator.OfInt iter = inboundTransfer.getSegments().iterator(); iter.hasNext(); ) {
             int segment = iter.nextInt();
-            List<InboundTransferTask> transfers = transfersBySegment.get(segment);
+            List<InboundTransferTask> transfers = currentStateTransfer.transfersBySegment.get(segment);
             if (transfers == null) {
                // It is possible that two task complete concurrently, one of them checks is all tasks
                // for given segments have been completed successfully and (finding out that it's true)
@@ -233,7 +238,7 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
                // finishing task.
                transfers.remove(inboundTransfer);
                if (transfers.isEmpty()) {
-                  transfersBySegment.remove(segment);
+                  currentStateTransfer.transfersBySegment.remove(segment);
                   if (trace) {
                      log.tracef("All transfer tasks for segment %d have completed.", segment);
                   }
@@ -263,7 +268,7 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
             if (ice.getMetadata() instanceof RemoteMetadata) {
                Address backup = ((RemoteMetadata) ice.getMetadata()).getAddress();
                retrieveEntry(ice.getKey(), backup);
-               for (Address member : cacheTopology.getActualMembers()) {
+               for (Address member : currentStateTransfer.cacheTopology.getActualMembers()) {
                   if (!member.equals(backup)) {
                      invalidate(ice.getKey(), ice.getMetadata().version(), member);
                   }
@@ -290,7 +295,7 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
                         if (metadata instanceof RemoteMetadata) {
                            Address backup = ((RemoteMetadata) metadata).getAddress();
                            retrieveEntry(me.getKey(), backup);
-                           for (Address member : cacheTopology.getActualMembers()) {
+                           for (Address member : currentStateTransfer.cacheTopology.getActualMembers()) {
                               if (!member.equals(backup)) {
                                  invalidate(me.getKey(), metadata.version(), member);
                               }
@@ -315,7 +320,7 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
       }
 
       boolean lastTransfer = false;
-      synchronized (transferMapsLock) {
+      synchronized (currentStateTransfer.transferMapsLock) {
          inboundSegments.removeAll(completedSegments);
          log.tracef("Unfinished inbound segments: " + inboundSegments);
          if (inboundSegments.isEmpty()) {
@@ -349,7 +354,7 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
 
       // we must not remove the transfer before the requests for values are sent
       // as we could notify the end of rebalance too soon
-      removeTransfer(inboundTransfer);
+      currentStateTransfer.removeTransfer(inboundTransfer, ScatteredStateConsumerImpl.this);
       if (trace)
          log.tracef("Inbound transfer removed, chunk counter is %s", chunkCounter.get());
       if (chunkCounter.get() == 0) {
@@ -397,6 +402,7 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
       long incrementedCounter = chunkCounter.incrementAndGet();
       if (trace)
          log.tracef("Invalidating versions on %s, chunk counter incremented to %d", member, incrementedCounter);
+      CacheTopology cacheTopology = distributionManager.getCacheTopology();
       InvalidateVersionsCommand ivc = commandsFactory.buildInvalidateVersionsCommand(cacheTopology.getTopologyId(), keys, topologyIds, versions, true);
       rpcManager.invokeCommand(member, ivc, SingleResponseCollector.validOnly(), rpcManager.getSyncRpcOptions())
                 .whenComplete((response, t) -> {

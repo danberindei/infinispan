@@ -180,7 +180,7 @@ public class StateProviderImpl implements StateProvider {
 
    private CacheTopology getCacheTopology(int requestTopologyId, Address destination, boolean isReqForTransactions) throws InterruptedException {
       CacheTopology cacheTopology = distributionManager.getCacheTopology();
-      int currentTopologyId = cacheTopology != null ? cacheTopology.getTopologyId() : -1;
+      int currentTopologyId = cacheTopology.getTopologyId();
       if (requestTopologyId < currentTopologyId) {
          if (isReqForTransactions)
             log.debugf("Transactions were requested by node %s with topology %d, older than the local topology (%d)",

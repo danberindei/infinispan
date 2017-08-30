@@ -29,11 +29,11 @@ import org.infinispan.factories.annotations.Start;
 import org.infinispan.interceptors.DDAsyncInterceptor;
 import org.infinispan.interceptors.InvocationFinallyFunction;
 import org.infinispan.remoting.RemoteException;
+import org.infinispan.remoting.transport.Address;
 import org.infinispan.remoting.transport.jgroups.SuspectException;
 import org.infinispan.statetransfer.AllOwnersLostException;
 import org.infinispan.statetransfer.OutdatedTopologyException;
 import org.infinispan.statetransfer.StateTransferLock;
-import org.infinispan.topology.CacheTopology;
 import org.infinispan.util.concurrent.CompletableFutures;
 import org.infinispan.util.concurrent.TimeoutException;
 import org.infinispan.util.logging.Log;
@@ -127,17 +127,14 @@ public abstract class BaseStateTransferInterceptor extends DDAsyncInterceptor {
    }
 
    protected final int currentTopologyId() {
-      final CacheTopology cacheTopology = distributionManager.getCacheTopology();
-      return cacheTopology == null ? -1 : cacheTopology.getTopologyId();
+      return distributionManager.getCacheTopology().getTopologyId();
    }
 
    protected final void updateTopologyId(TopologyAffectedCommand command) {
       // set the topology id if it was not set before (ie. this is local command)
       // TODO Make tx commands extend FlagAffectedCommand so we can use CACHE_MODE_LOCAL in TransactionTable.cleanupStaleTransactions
       if (command.getTopologyId() == -1) {
-         CacheTopology cacheTopology = distributionManager.getCacheTopology();
-         // Before the topology is set in STM/StateConsumer the topology in DistributionManager is 0
-         int topologyId = cacheTopology == null ? 0 : cacheTopology.getTopologyId();
+         int topologyId = distributionManager.getCacheTopology().getTopologyId();
          if (trace) getLog().tracef("Setting command topology to %d", topologyId);
          command.setTopologyId(topologyId);
       }
@@ -191,8 +188,7 @@ public abstract class BaseStateTransferInterceptor extends DDAsyncInterceptor {
          ce = ce.getCause();
       }
       TopologyAffectedCommand cmd = (TopologyAffectedCommand) rCommand;
-      final CacheTopology cacheTopology = distributionManager.getCacheTopology();
-      int currentTopologyId = cacheTopology == null ? -1 : cacheTopology.getTopologyId();
+      int currentTopologyId = distributionManager.getCacheTopology().getTopologyId();
       int requestedTopologyId = currentTopologyId;
       if (ce instanceof SuspectException) {
          if (trace)
@@ -202,7 +198,9 @@ public abstract class BaseStateTransferInterceptor extends DDAsyncInterceptor {
          // a broadcast to all nodes then can end with suspect exception, but we won't get any new topology.
          // An example of this situation is when a node sends leave - topology can be installed before the new view.
          // To prevent suspect exceptions use SYNCHRONOUS_IGNORE_LEAVERS response mode.
-         if (currentTopologyId == cmd.getTopologyId() && !cacheTopology.getActualMembers().contains(((SuspectException) ce).getSuspect())) {
+         Address suspect = ((SuspectException) ce).getSuspect();
+         if (currentTopologyId == cmd.getTopologyId() &&
+                !distributionManager.getCacheTopology().getActualMembers().contains(suspect)) {
             throw new IllegalStateException("Command was not sent with SYNCHRONOUS_IGNORE_LEAVERS?");
          }
       } else if (ce instanceof OutdatedTopologyException) {

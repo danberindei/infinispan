@@ -125,7 +125,9 @@ public class StateProviderTest {
       stateTransferLock = mock(StateTransferLock.class);
       distributionManager = mock(DistributionManager.class);
       ef = mock(InternalEntryFactory.class);
-      when(distributionManager.getCacheTopology()).thenAnswer(invocation -> cacheTopology);
+      when(distributionManager.getCacheTopology())
+            .thenAnswer(invocation -> new LocalizedCacheTopology(CacheMode.DIST_SYNC, cacheTopology,
+                                                                 new HashFunctionPartitioner(), A,true));
    }
 
    public void test1() throws InterruptedException {

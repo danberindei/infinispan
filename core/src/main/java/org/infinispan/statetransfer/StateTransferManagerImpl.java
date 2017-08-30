@@ -173,7 +173,7 @@ public class StateTransferManagerImpl implements StateTransferManager {
       CacheTopology oldCacheTopology = distributionManager.getCacheTopology();
 
       int newTopologyId = newCacheTopology.getTopologyId();
-      if (oldCacheTopology != null && oldCacheTopology.getTopologyId() > newTopologyId) {
+      if (oldCacheTopology.getTopologyId() > newTopologyId) {
          throw new IllegalStateException("Old topology is higher: old=" + oldCacheTopology + ", new=" + newCacheTopology);
       }
 
@@ -248,7 +248,7 @@ public class StateTransferManagerImpl implements StateTransferManager {
 
    @Override
    public boolean isJoinComplete() {
-      return distributionManager.getCacheTopology() != null; // TODO [anistor] this does not mean we have received a topology update or a rebalance yet
+      return distributionManager.isJoinComplete();
    }
 
    @Override
@@ -275,9 +275,9 @@ public class StateTransferManagerImpl implements StateTransferManager {
    public Map<Address, Response> forwardCommandIfNeeded(TopologyAffectedCommand command, Set<Object> affectedKeys,
                                                         Address origin) {
       LocalizedCacheTopology cacheTopology = distributionManager.getCacheTopology();
-      if (cacheTopology == null) {
+      if (!cacheTopology.isConnected()) {
          if (trace) {
-            log.tracef("Not fowarding command %s because topology is null.", command);
+            log.tracef("Not forwarding command %s because the local node is not connected to the cluster", command);
          }
          return Collections.emptyMap();
       }

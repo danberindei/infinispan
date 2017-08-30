@@ -119,7 +119,6 @@ public class ScatteredDistributionInterceptor extends ClusteringInterceptor {
    private final static boolean trace = log.isTraceEnabled();
 
    @Inject protected ScatteredVersionManager<Object> svm;
-   @Inject protected GroupManager groupManager;
    @Inject protected TimeService timeService;
    @Inject protected CacheNotifier cacheNotifier;
    @Inject protected FunctionalNotifier functionalNotifier;
@@ -327,6 +326,9 @@ public class ScatteredDistributionInterceptor extends ClusteringInterceptor {
 
    private <T extends FlagAffectedCommand & TopologyAffectedCommand> LocalizedCacheTopology checkTopology(T command) {
       LocalizedCacheTopology cacheTopology = distributionManager.getCacheTopology();
+      if (trace) {
+         log.tracef("%s has topology %d (current is %d)", command, command.getTopologyId(), cacheTopology.getTopologyId());
+      }
       if (!command.hasAnyFlag(FlagBitSets.SKIP_OWNERSHIP_CHECK | FlagBitSets.CACHE_MODE_LOCAL) && command.getTopologyId() != cacheTopology.getTopologyId()) {
          assert command.getTopologyId() >= 0;
          // When this exception is thrown and the topology is installed before we handle this in StateTransferInterceptor,
@@ -334,8 +336,6 @@ public class ScatteredDistributionInterceptor extends ClusteringInterceptor {
          // Note that this does not happen to write commands as these are not processed until we receive the topology
          // these request.
          throw new OutdatedTopologyException(command.getTopologyId());
-      } else if (trace) {
-         log.tracef("%s has topology %d (current is %d)", command, command.getTopologyId(), cacheTopology.getTopologyId());
       }
       return cacheTopology;
    }

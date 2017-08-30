@@ -28,6 +28,8 @@ import org.infinispan.container.versioning.EntryVersion;
 import org.infinispan.container.versioning.SimpleClusteredVersion;
 import org.infinispan.distribution.DistributionManager;
 import org.infinispan.distribution.LocalizedCacheTopology;
+import org.infinispan.distribution.DistributionManager;
+import org.infinispan.distribution.LocalizedCacheTopology;
 import org.infinispan.distribution.ch.ConsistentHash;
 import org.infinispan.factories.ComponentRegistry;
 import org.infinispan.factories.annotations.ComponentName;
@@ -359,7 +361,7 @@ public class ScatteredVersionManagerImpl<K> implements ScatteredVersionManager<K
          segmentVersions.set(segment, 0);
          ownerTopologyIds.set(segment, topologyId);
          if (!segmentStates.compareAndSet(segment, SegmentState.NOT_OWNED, SegmentState.OWNED)) {
-            throw new IllegalStateException(String.format("Segment %d is in state %s", segment, segmentStates.get(segment)));
+            throw new IllegalStateException(String.format("Segment " + segment + " is in state %s", segment, segmentStates.get(segment)));
          }
       }
       if (log.isDebugEnabled()) {

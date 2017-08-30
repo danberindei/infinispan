@@ -40,6 +40,7 @@ import org.infinispan.container.entries.InternalCacheEntry;
 import org.infinispan.container.impl.InternalDataContainer;
 import org.infinispan.context.InvocationContextFactory;
 import org.infinispan.distribution.DistributionManager;
+import org.infinispan.distribution.LocalizedCacheTopology;
 import org.infinispan.distribution.TestAddress;
 import org.infinispan.distribution.TriangleOrderManager;
 import org.infinispan.distribution.ch.impl.DefaultConsistentHash;
@@ -164,6 +165,7 @@ public class StateConsumerTest extends AbstractInfinispanTest {
                                                           (IntSet) invocation.getArguments()[3]));
 
       when(transport.getViewId()).thenReturn(1);
+
       when(rpcManager.getAddress()).thenReturn(addresses[0]);
       when(rpcManager.getTransport()).thenReturn(transport);
 
@@ -209,8 +211,25 @@ public class StateConsumerTest extends AbstractInfinispanTest {
       cacheEntries.add(new ImmortalCacheEntry(key1, "value1"));
       cacheEntries.add(new ImmortalCacheEntry(key2, "value2"));
       when(dataContainer.iterator()).thenAnswer(invocation -> cacheEntries.iterator());
+
       when(transactionTable.getLocalTransactions()).thenReturn(Collections.emptyList());
       when(transactionTable.getRemoteTransactions()).thenReturn(Collections.emptyList());
+
+      CacheTopology initialTopology = new CacheTopology(0, 0, ch2, null, CacheTopology.Phase.NO_REBALANCE,
+                                                      ch2.getMembers(),
+                                                      persistentUUIDManager.mapAddresses(ch2.getMembers()));
+      when(distributionManager.getCacheTopology()).thenReturn(
+            new LocalizedCacheTopology(CacheMode.DIST_SYNC, initialTopology,
+                                       new HashFunctionPartitioner(), addresses[0], false));
+
+      // create state consumer
+      TestingUtil.inject(stateConsumer, cache, TestingUtil.named(STATE_TRANSFER_EXECUTOR, pooledExecutorService),
+                         stateTransferManager, localTopologyManager, interceptorChain, icf, configuration, rpcManager, null,
+                         commandsFactory, persistenceManager, dataContainer, transactionTable, stateTransferLock, cacheNotifier,
+                         totalOrderManager, TestingUtil.named(REMOTE_COMMAND_EXECUTOR, remoteCommandsExecutor),
+                         new CommitManager(), new CommandAckCollector(), new TriangleOrderManager(0),
+                         new HashFunctionPartitioner(), conflictManager);
+      stateConsumer.start();
 
       assertFalse(stateConsumer.hasActiveTransfers());
 

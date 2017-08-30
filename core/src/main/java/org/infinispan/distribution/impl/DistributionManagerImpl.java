@@ -63,7 +63,7 @@ public class DistributionManagerImpl implements DistributionManager {
       cacheMode = configuration.clustering().cacheMode();
       // We need an extended topology for preload, before the start of StateTransferManagerImpl
       Address localAddress = transport == null ? LocalModeAddress.INSTANCE : transport.getAddress();
-      extendedTopology = makeSingletonTopology(cacheMode, keyPartitioner, configuration.clustering().hash().numSegments(),
+      extendedTopology = makeSingletonTopology(CacheMode.LOCAL, keyPartitioner, configuration.clustering().hash().numSegments(),
             localAddress);
    }
 
@@ -172,6 +172,7 @@ public class DistributionManagerImpl implements DistributionManager {
    public void setCacheTopology(CacheTopology cacheTopology) {
       if (trace) log.tracef("Topology updated to %s", cacheTopology);
       this.extendedTopology = createLocalizedCacheTopology(cacheTopology);
+      if (trace) log.tracef("Topology updated to %s", cacheTopology);
    }
 
    @Override

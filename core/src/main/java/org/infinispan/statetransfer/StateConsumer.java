@@ -30,8 +30,9 @@ public interface StateConsumer {
    /**
     * Receive notification of topology changes. StateRequestCommands are issued for segments that are new to this member
     * and the segments that are no longer owned are discarded.
-    * @param cacheTopology
-    * @param isRebalance
+    *
+    * This method is not thread-safe, it must not be called concurrently from 2 threads.
+    *
     * @return future that is completed when the state transfer has finished
     */
    CompletableFuture<Void> onTopologyUpdate(CacheTopology cacheTopology, boolean isRebalance);

@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.infinispan.commons.util.SmallIntSet;
 import org.infinispan.distribution.ch.ConsistentHash;
 import org.infinispan.manager.CacheContainer;
 import org.infinispan.remoting.transport.Address;
@@ -15,7 +16,7 @@ import org.testng.annotations.Test;
 public class ConcurrentNonOverlappingLeaveTest extends RehashLeaveTestBase {
    Address l1, l2;
    // since two nodes are leaving, we allow some entries to be lost
-   private Set<Integer> lostSegments = new HashSet<>();
+   private Set<Integer> lostSegments = new SmallIntSet();
 
    @Override
    protected void assertOwnershipAndNonOwnership(Object key, boolean allowL1) {

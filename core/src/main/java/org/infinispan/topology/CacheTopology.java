@@ -212,6 +212,7 @@ public class CacheTopology {
             "id=" + topologyId +
             ", phase=" + phase +
             ", rebalanceId=" + rebalanceId +
+            ", phase=" + phase    +
             ", currentCH=" + currentCH +
             ", pendingCH=" + pendingCH +
             ", unionCH=" + unionCH +

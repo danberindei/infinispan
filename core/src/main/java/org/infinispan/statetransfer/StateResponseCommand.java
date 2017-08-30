@@ -145,10 +145,10 @@ public class StateResponseCommand extends BaseRpcCommand implements TopologyAffe
       return "StateResponseCommand{" +
             "cache=" + cacheName +
             ", pushTransfer=" + pushTransfer +
-            ", stateChunks=" + stateChunks +
             ", origin=" + getOrigin() +
             ", topologyId=" + topologyId +
             ", applyState=" + applyState +
+            ", stateChunks=" + stateChunks +
             '}';
    }
 }

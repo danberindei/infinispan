@@ -45,9 +45,9 @@ public class LocalizedCacheTopology extends CacheTopology {
     */
    public static LocalizedCacheTopology makeSingletonTopology(CacheMode cacheMode, Address localAddress) {
       List<Address> members = Collections.singletonList(localAddress);
-       CacheTopology cacheTopology = new CacheTopology(-1, -1, null, null, Phase.NO_REBALANCE, members, null);
-       return new LocalizedCacheTopology(CacheMode.LOCAL, cacheTopology, SingleSegmentKeyPartitioner.getInstance(),
-             localAddress, false);
+
+          CacheTopology cacheTopology = new CacheTopology(-1, -1, null, null, Phase.NO_REBALANCE, members, null);
+          return new LocalizedCacheTopology(CacheMode.LOCAL, cacheTopology, SingleSegmentKeyPartitioner.getInstance(), localAddress, false);
    }
 
    /**
@@ -68,6 +68,7 @@ public class LocalizedCacheTopology extends CacheTopology {
       super(cacheTopology.getTopologyId(), cacheTopology.getRebalanceId(), cacheTopology.getCurrentCH(),
             cacheTopology.getPendingCH(), cacheTopology.getUnionCH(), cacheTopology.getPhase(), cacheTopology.getActualMembers(),
             cacheTopology.getMembersPersistentUUIDs());
+      this.connected = connected;
 
       ConsistentHash readCH = getReadConsistentHash();
       ConsistentHash writeCH = getWriteConsistentHash();
@@ -270,7 +271,7 @@ public class LocalizedCacheTopology extends CacheTopology {
 
    /**
     * @return {@code true} if the local node received this topology from the coordinator,
-    * {@code false} otherwise (e.g. during preload).
+    *         {@code false} otherwise (e.g. during preload).
     */
    public boolean isConnected() {
       return connected;

@@ -513,8 +513,7 @@ public class RpcManagerImpl implements RpcManager, JmxStatisticsExposer {
 
    @Override
    public int getTopologyId() {
-      CacheTopology cacheTopology = distributionManager.getCacheTopology();
-      return cacheTopology != null ? cacheTopology.getTopologyId() : -1;
+      return distributionManager.getCacheTopology().getTopologyId();
    }
 
    @Override
