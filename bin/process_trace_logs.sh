@@ -34,7 +34,7 @@ for FAILURES_LOG in $(find "$ROOT_DIR" -name 'test-failures*.log'); do
   done
 
   # Remove the tests that didn't fail
-  rm -f ${LOG_DIR}/*Test*.log.gz
+  rm ${LOG_DIR}/*Test*.log.gz
 
   # Move any remaining logs
   for LOG in ${LOG_DIR}/*.log.gz; do
