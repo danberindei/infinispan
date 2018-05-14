@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -284,7 +285,17 @@ public class StateConsumerImpl implements StateConsumer {
       // No need for a try/finally block, since it's just an assignment
       stateTransferLock.acquireExclusiveTopologyLock();
       beforeTopologyInstalled(cacheTopology.getTopologyId(), startRebalance, previousWriteCh, newWriteCh);
+      try {
+         Thread.sleep(ThreadLocalRandom.current().nextInt(100));
+      } catch (InterruptedException e) {
+         Thread.currentThread().interrupt();
+      }
       this.cacheTopology = cacheTopology;
+      try {
+         Thread.sleep(ThreadLocalRandom.current().nextInt(100));
+      } catch (InterruptedException e) {
+         Thread.currentThread().interrupt();
+      }
       distributionManager.setCacheTopology(cacheTopology);
 
       IntSet newWriteSegments = getOwnedSegments(newWriteCh);
