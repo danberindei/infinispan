@@ -97,6 +97,8 @@ public class TestNGTestListener implements ITestListener, IConfigurationListener
       if (!firstTime)
          return;
 
+      RunningTestsRegistry.stop();
+
       int count = 0;
       for (Map.Entry<Thread, StackTraceElement[]> s : Thread.getAllStackTraces().entrySet()) {
          Thread thread = s.getKey();

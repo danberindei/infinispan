@@ -46,6 +46,15 @@ class RunningTestsRegistry {
       scheduledTasks.put(testThread, future);
    }
 
+   static void stop() {
+      executor.shutdownNow();
+      try {
+         executor.awaitTermination(1, SECONDS);
+      } catch (InterruptedException e) {
+         Thread.currentThread().interrupt();
+      }
+   }
+
    @SuppressWarnings("deprecation")
    private static void killLongTest(Thread testThread, String testName, String simpleName) {
       try {
