@@ -110,6 +110,8 @@ public class TestNGTestListener implements ITestListener, IConfigurationListener
       if (!firstTime)
          return;
 
+      RunningTestsRegistry.stop();
+
       logLeakedThreads();
    }
 

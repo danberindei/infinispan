@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.infinispan.test.AbstractInfinispanTest;
 import org.infinispan.test.TestingUtil;
@@ -54,29 +56,28 @@ public class ExecutorAllCompletionServiceTest extends AbstractInfinispanTest {
       assertEquals("second", findCause(service.getFirstException()).getMessage());
    }
 
-   public void testParallelWait() throws InterruptedException {
+   public void testParallelWait() throws Exception {
       final ExecutorAllCompletionService service = createService(2);
       for (int i = 0; i < 300; ++i) {
          service.submit(new WaitRunnable(10), null);
       }
-      List<Thread> threads = new ArrayList<>(10);
+      List<Future<Void>> futures = new ArrayList<>(10);
       for (int i = 0; i < 10; ++i) {
-         Thread t = new Thread(() -> {
+         Future<Void> f = fork(() -> {
             service.waitUntilAllCompleted();
             assertTrue(service.isAllCompleted());
             assertFalse(service.isExceptionThrown());
          });
-         threads.add(t);
-         t.start();
+         futures.add(f);
       }
-      for (Thread t : threads) {
-         t.join();
+      for (Future<Void> t : futures) {
+         t.get(10, TimeUnit.SECONDS);
       }
       assertTrue(service.isAllCompleted());
       assertFalse(service.isExceptionThrown());
    }
 
-   public void testParallelException() throws InterruptedException {
+   public void testParallelException() throws Exception {
       final ExecutorAllCompletionService service = createService(2);
       for (int i = 0; i < 150; ++i) {
          service.submit(new WaitRunnable(10), null);
@@ -85,18 +86,17 @@ public class ExecutorAllCompletionServiceTest extends AbstractInfinispanTest {
       for (int i = 0; i < 150; ++i) {
          service.submit(new WaitRunnable(10), null);
       }
-      List<Thread> threads = new ArrayList<>(10);
+      List<Future<Void>> futures = new ArrayList<>(10);
       for (int i = 0; i < 10; ++i) {
-         Thread t = new Thread(() -> {
+         Future<Void> f = fork(() -> {
             service.waitUntilAllCompleted();
             assertTrue(service.isAllCompleted());
             assertTrue(service.isExceptionThrown());
          });
-         threads.add(t);
-         t.start();
+         futures.add(f);
       }
-      for (Thread t : threads) {
-         t.join();
+      for (Future<Void> f : futures) {
+         f.get(10, TimeUnit.SECONDS);
       }
       assertTrue(service.isAllCompleted());
       assertTrue(service.isExceptionThrown());

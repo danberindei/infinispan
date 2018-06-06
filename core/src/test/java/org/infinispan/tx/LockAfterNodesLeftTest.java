@@ -1,9 +1,12 @@
-
 package org.infinispan.tx;
 
 import static org.testng.Assert.assertEquals;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.transaction.RollbackException;
@@ -76,51 +79,48 @@ public class LockAfterNodesLeftTest extends MultipleCacheManagersTest {
       final AtomicInteger rolledBack = new AtomicInteger();
 
       final CountDownLatch latch = new CountDownLatch(1);
-      Thread[] threads = new Thread[remainingNodesCount];
+      List<Future<Void>> futures = new ArrayList<>(remainingNodesCount);
       for (int i = 0; i < remainingNodesCount; i++) {
          final int nodeIndex = i;
-         threads[i] = new Thread("LockAfterNodesLeftTest.Putter-" + i) {
-            public void run() {
+         futures.add(fork(() -> {
+            try {
+               latch.await();
+
+               log.debug("about to begin transaction...");
+               tm(nodeIndex).begin();
                try {
-                  latch.await();
+                  log.debug("Getting lock on cache key");
+                  cache(nodeIndex).getAdvancedCache().lock(key);
+                  log.debug("Got lock");
+                  cache(nodeIndex).put(key, "value");
 
-                  log.debug("about to begin transaction...");
-                  tm(nodeIndex).begin();
-                  try {
-                     log.debug("Getting lock on cache key");
-                     cache(nodeIndex).getAdvancedCache().lock(key);
-                     log.debug("Got lock");
-                     cache(nodeIndex).put(key, "value");
-
-                     log.debug("Done with put");
-                     TestingUtil.sleepRandom(200);
-                     tm(nodeIndex).commit();
-                  } catch (Throwable e) {
-                     if (e instanceof RollbackException) {
-                        rolledBack.incrementAndGet();
-                     } else if (tm(nodeIndex).getTransaction() != null) {
-                        // the TX is most likely rolled back already, but we attempt a rollback just in case it isn't
-                        try {
-                           tm(nodeIndex).rollback();
-                           rolledBack.incrementAndGet();
-                        } catch (SystemException e1) {
-                           log.error("Failed to rollback", e1);
-                        }
-                     }
-                     throw e;
-                  }
+                  log.debug("Done with put");
+                  TestingUtil.sleepRandom(200);
+                  tm(nodeIndex).commit();
                } catch (Throwable e) {
-                  errorCount.incrementAndGet();
-                  log.error(e);
+                  if (e instanceof RollbackException) {
+                     rolledBack.incrementAndGet();
+                  } else if (tm(nodeIndex).getTransaction() != null) {
+                     // the TX is most likely rolled back already, but we attempt a rollback just in case it isn't
+                     try {
+                        tm(nodeIndex).rollback();
+                        rolledBack.incrementAndGet();
+                     } catch (SystemException e1) {
+                        log.error("Failed to rollback", e1);
+                     }
+                  }
+                  throw e;
                }
+            } catch (Throwable e) {
+               errorCount.incrementAndGet();
+               log.error(e);
             }
-         };
-         threads[i].start();
+         }));
       }
 
       latch.countDown();
-      for (Thread t : threads) {
-         t.join();
+      for (Future<Void> f : futures) {
+         f.get(10, TimeUnit.SECONDS);
       }
 
       log.trace("Got errors: " + errorCount.get());

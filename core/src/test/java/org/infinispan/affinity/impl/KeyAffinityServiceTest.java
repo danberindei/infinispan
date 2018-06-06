@@ -6,12 +6,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.infinispan.Cache;
 import org.infinispan.affinity.KeyAffinityServiceFactory;
 import org.infinispan.distribution.LocalizedCacheTopology;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.infinispan.remoting.transport.Address;
+import org.infinispan.test.ExceptionRunnable;
 import org.testng.annotations.Test;
 
 /**
@@ -43,21 +46,17 @@ public class KeyAffinityServiceTest extends BaseKeyAffinityServiceTest {
    }
 
    @Test (dependsOnMethods = "testKeysAreCorrectlyCreated")
-   public void testConcurrentConsumptionOfKeys() throws InterruptedException {
-      List<KeyConsumer> consumers = new ArrayList<>();
+   public void testConcurrentConsumptionOfKeys() throws Exception {
+      List<Future<Void>> consumers = new ArrayList<>();
       int keysToConsume = 1000;
       CountDownLatch consumersStart = new CountDownLatch(1);
       for (int i = 0; i < 10; i++) {
-         consumers.add(new KeyConsumer(keysToConsume, consumersStart));
+         consumers.add(fork(new KeyConsumer(keysToConsume, consumersStart)));
       }
       consumersStart.countDown();
 
-      for (KeyConsumer kc : consumers) {
-         kc.join();
-      }
-
-      for (KeyConsumer kc : consumers) {
-         assertEquals(null, kc.exception);
+      for (Future<Void> f : consumers) {
+         f.get(10, TimeUnit.SECONDS);
       }
 
       assertCorrectCapacity();
@@ -97,7 +96,7 @@ public class KeyAffinityServiceTest extends BaseKeyAffinityServiceTest {
       }
    }
 
-   public class KeyConsumer extends Thread {
+   public class KeyConsumer implements ExceptionRunnable {
 
       volatile Exception exception;
 
@@ -108,10 +107,8 @@ public class KeyAffinityServiceTest extends BaseKeyAffinityServiceTest {
       private final Random rnd = new Random();
 
       public KeyConsumer(int keysToConsume, CountDownLatch consumersStart) {
-         super("KeyConsumer");
          this.keysToConsume = keysToConsume;
          this.consumersStart = consumersStart;
-         start();
       }
 
       @Override
@@ -124,13 +121,8 @@ public class KeyAffinityServiceTest extends BaseKeyAffinityServiceTest {
          }
          for (int i = 0; i < keysToConsume; i++) {
             Address whichAddr = topology.get(rnd.nextInt(topology.size()));
-            try {
-               Object keyForAddress = keyAffinityService.getKeyForAddress(whichAddr);
-               assertMapsToAddress(keyForAddress, whichAddr);
-            } catch (Exception e) {
-               this.exception = e;
-               break;
-            }
+            Object keyForAddress = keyAffinityService.getKeyForAddress(whichAddr);
+            assertMapsToAddress(keyForAddress, whichAddr);
          }
       }
    }

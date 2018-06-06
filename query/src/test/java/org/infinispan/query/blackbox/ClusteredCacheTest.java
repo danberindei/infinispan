@@ -96,6 +96,16 @@ public class ClusteredCacheTest extends MultipleCacheManagersTest {
       };
    }
 
+   @Override
+   protected String[] parameterNames() {
+      return new String[]{null};
+   }
+
+   @Override
+   protected Object[] parameterValues() {
+      return new Object[]{storageType};
+   }
+
    ClusteredCacheTest storageType(StorageType storageType) {
       this.storageType = storageType;
       return this;

@@ -7,7 +7,7 @@
       <stack-file name="tcp" path="jgroups-tcp.xml"/>
    </jgroups>
    <threads>
-      <thread-factory name="infinispan-factory" group-name="infinispan" thread-name-pattern="%G %i" priority="5"/>
+      <thread-factory name="infinispan-factory" group-name="infinispan" thread-name-pattern="thread-%c-%n-p%f-t%t" priority="5"/>
       <!-- listener-executor -->
       <blocking-bounded-queue-thread-pool name="infinispan-async" thread-factory="infinispan-factory"
             core-threads="5" max-threads="5" queue-length="0" keepalive-time="0"/>

@@ -4,6 +4,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -47,13 +48,13 @@ public class EmbeddedClusteredLockManager implements ClusteredLockManager {
    public static final String IS_LOCKED = "isLocked";
 
    private final ConcurrentHashMap<String, ClusteredLock> locks = new ConcurrentHashMap<>();
-   private final CompletableFuture<CacheHolder> cacheHolderFuture;
+   private final Future<CacheHolder> cacheHolderFuture;
    private ScheduledExecutorService scheduledExecutorService;
    private Executor executor;
 
    private AdvancedCache<ClusteredLockKey, ClusteredLockValue> cache;
 
-   public EmbeddedClusteredLockManager(CompletableFuture<CacheHolder> cacheHolderFuture) {
+   public EmbeddedClusteredLockManager(Future<CacheHolder> cacheHolderFuture) {
       this.cacheHolderFuture = cacheHolderFuture;
    }
 
@@ -196,7 +197,7 @@ public class EmbeddedClusteredLockManager implements ClusteredLockManager {
       return clusteredLockValue != null && clusteredLockValue.getState() == ClusteredLockState.ACQUIRED;
    }
 
-   private static CacheHolder extractCacheHolder(CompletableFuture<CacheHolder> future) {
+   private static CacheHolder extractCacheHolder(Future<CacheHolder> future) {
       try {
          return future.get(WAIT_CACHES_TIMEOUT, TimeUnit.NANOSECONDS);
       } catch (InterruptedException e) {

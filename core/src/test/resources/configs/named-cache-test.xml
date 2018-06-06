@@ -28,10 +28,9 @@
 
    <cache-container default-cache="default" statistics="true" shutdown-hook="REGISTER"
                     listener-executor="listener" persistence-executor="persistence"
-                    state-transfer-executor="state-transfer" expiration-executor="expiration"
-                    async-executor="async">
+                    state-transfer-executor="state-transfer" expiration-executor="expiration" async-executor="async">
       <transport stack="udp" cluster="infinispan-cluster" lock-timeout="50000" node-name="Jalapeno" machine="m1" rack="r1" site="s1"
-                 executor="transport" remote-command-executor="remote" />
+                 executor="transport" remote-command-executor="remote"/>
       <serialization marshaller="org.infinispan.marshall.TestObjectStreamMarshaller" version="1.0">
          <advanced-externalizer id="1234" class="org.infinispan.marshall.AdvancedExternalizerTest$IdViaConfigObj$Externalizer"/>
          <advanced-externalizer class="org.infinispan.marshall.AdvancedExternalizerTest$IdViaAnnotationObj$Externalizer"/>

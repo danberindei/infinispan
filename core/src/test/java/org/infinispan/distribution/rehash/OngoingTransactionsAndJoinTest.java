@@ -5,15 +5,14 @@ import static org.infinispan.test.TestingUtil.extractComponent;
 import static org.infinispan.test.TestingUtil.replaceComponent;
 import static org.infinispan.test.TestingUtil.wrapInboundInvocationHandler;
 
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.Callable;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-
 import javax.transaction.Transaction;
 
 import org.infinispan.Cache;
@@ -30,6 +29,7 @@ import org.infinispan.remoting.inboundhandler.DeliverOrder;
 import org.infinispan.remoting.inboundhandler.PerCacheInboundInvocationHandler;
 import org.infinispan.remoting.inboundhandler.Reply;
 import org.infinispan.remoting.responses.ExceptionResponse;
+import org.infinispan.test.ExceptionRunnable;
 import org.infinispan.test.MultipleCacheManagersTest;
 import org.infinispan.test.TestingUtil;
 import org.infinispan.test.fwk.CleanupAfterMethod;
@@ -59,7 +59,7 @@ public class OngoingTransactionsAndJoinTest extends MultipleCacheManagersTest {
       addClusterEnabledCacheManager(configuration);
    }
 
-   public void testRehashOnJoin() throws InterruptedException {
+   public void testRehashOnJoin() throws Exception {
       Cache<Object, Object> firstNode = cache(0);
       final CountDownLatch txsStarted = new CountDownLatch(3), txsReady = new CountDownLatch(3), joinEnded = new CountDownLatch(1), rehashStarted = new CountDownLatch(1);
       wrapInboundInvocationHandler(firstNode, original -> new ListeningHandler(original, txsReady, joinEnded, rehashStarted));
@@ -75,22 +75,17 @@ public class OngoingTransactionsAndJoinTest extends MultipleCacheManagersTest {
       ic.addInterceptorAfter(ct, TxInterceptor.class);
 
 
-      Set<Thread> threads = new HashSet<>();
-      threads.add(new Thread(ut, "Worker-UnpreparedDuringRehashTask"));
-      threads.add(new Thread(pt, "Worker-PrepareDuringRehashTask"));
-      threads.add(new Thread(ct, "Worker-CommitDuringRehashTask"));
-
-      for (Thread t : threads) t.start();
+      List<Future<Void>> futures = new ArrayList<>();
+      futures.add(fork(ut));
+      futures.add(fork(pt));
+      futures.add(fork(ct));
 
       txsStarted.await(10, SECONDS);
 
       // we don't have a hook for the start of the rehash any more
-      delayedExecutor.schedule(new Callable<Object>() {
-         @Override
-         public Object call() throws Exception {
-            rehashStarted.countDown();
-            return null;
-         }
+      delayedExecutor.schedule(() -> {
+         rehashStarted.countDown();
+         return null;
       }, 10, TimeUnit.MILLISECONDS);
 
       // start a new node!
@@ -101,7 +96,7 @@ public class OngoingTransactionsAndJoinTest extends MultipleCacheManagersTest {
 
       Cache<?, ?> joiner = cache(1);
 
-      for (Thread t : threads) t.join();
+      for (Future<Void> t : futures) t.get(10, SECONDS);
 
       TestingUtil.waitForNoRebalance(cache(0), cache(1));
 
@@ -119,7 +114,7 @@ public class OngoingTransactionsAndJoinTest extends MultipleCacheManagersTest {
       }
    }
 
-   abstract class TransactionalTask extends CommandInterceptor implements Runnable {
+   abstract class TransactionalTask extends CommandInterceptor implements ExceptionRunnable {
       Cache<Object, Object> cache;
       CountDownLatch txsStarted, txsReady, joinEnded, rehashStarted;
       volatile Transaction tx;

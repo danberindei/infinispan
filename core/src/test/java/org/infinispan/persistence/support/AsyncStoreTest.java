@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -47,6 +48,7 @@ import org.infinispan.persistence.spi.InitializationContext;
 import org.infinispan.persistence.spi.PersistenceException;
 import org.infinispan.test.AbstractInfinispanTest;
 import org.infinispan.test.CacheManagerCallable;
+import org.infinispan.test.Exceptions;
 import org.infinispan.test.TestingUtil;
 import org.infinispan.test.fwk.TestCacheManagerFactory;
 import org.infinispan.test.fwk.TestInternalCacheEntryFactory;
@@ -61,6 +63,7 @@ import org.testng.annotations.Test;
 @Test(groups = "unit", testName = "persistence.support.AsyncStoreTest", sequential=true)
 public class AsyncStoreTest extends AbstractInfinispanTest {
    private static final Log log = LogFactory.getLog(AsyncStoreTest.class);
+   public static final int QUEUE_SIZE = 100;
    private AdvancedAsyncCacheWriter writer;
    private AdvancedAsyncCacheLoader loader;
    private TestObjectStreamMarshaller marshaller;
@@ -101,6 +104,7 @@ public class AsyncStoreTest extends AbstractInfinispanTest {
       dummyCfg
          .async()
             .enable()
+            .modificationQueueSize(QUEUE_SIZE)
             .threadPoolSize(10);
       dummyCfg.slow(slow);
       InitializationContext ctx = PersistenceMockUtil.createContext(getClass().getSimpleName(), builder.build(), marshaller);
@@ -285,30 +289,29 @@ public class AsyncStoreTest extends AbstractInfinispanTest {
 
       final int lastValue[] = { 0 };
       // start a thread that keeps writing new values for the same key, until the store is stopped
+      CountDownLatch latch = new CountDownLatch(1);
       final String key = "testConcurrentWriteAndStop";
-      Thread t = new Thread() {
-         @Override
-         public void run() {
-            try {
-               for (;;) {
-                  int v = lastValue[0] + 1;
-                  writer.write(new MarshalledEntryImpl(key, key + v, null, marshaller()));
-                  lastValue[0] = v;
-               }
-            } catch (CacheException expected) {
+      Future<Void> f = fork(() -> {
+         for (;;) {
+            int v = lastValue[0] + 1;
+            writer.write(new MarshalledEntryImpl(key, key + v, null, marshaller()));
+            lastValue[0] = v;
+            if (v == QUEUE_SIZE * 3 / 2) {
+               latch.countDown();
             }
          }
-      };
-      t.start();
+      });
 
       // wait until thread has written some values
-      Thread.sleep(500);
+      latch.await(10, TimeUnit.SECONDS);
       writer.stop();
 
       // check that the last value successfully written to the AsyncStore has also been written to the underlying store
       MarshalledEntry me = loader.undelegate().load(key);
       assertNotNull(me);
       assertEquals(me.getValue(), key + lastValue[0]);
+
+      Exceptions.expectExecutionException(CacheException.class, f);
    }
 
    @Test(timeOut=30000)
@@ -317,25 +320,18 @@ public class AsyncStoreTest extends AbstractInfinispanTest {
       createStore(true);
 
       // start a thread that keeps clearing the store until its stopped
-      Thread t = new Thread() {
-         @Override
-         public void run() {
-            try {
-               for (;;)
-                  writer.clear();
-            } catch (CacheException expected) {
-            }
-         }
-      };
-      t.start();
+      CountDownLatch latch = new CountDownLatch(1);
+      Future<Void> f = fork(() -> {
+         for (;;)
+            writer.clear();
+      });
 
       // wait until thread has started
       Thread.sleep(500);
       writer.stop();
 
       // background thread should exit with CacheException
-      t.join(1000);
-      assertFalse(t.isAlive());
+      Exceptions.expectExecutionException(CacheException.class, f);
    }
 
    private void doTestPut(int number, String key, String value) throws Exception {
@@ -520,32 +516,31 @@ public class AsyncStoreTest extends AbstractInfinispanTest {
       writer.start();
       underlying.init(ctx);
       underlying.start();
+      Future<Void> t;
       try {
          final CountDownLatch done = new CountDownLatch(1);
 
          underlying.lock.lock();
          try {
-            Thread t = new Thread() {
-               @Override
-               public void run() {
-                  try {
-                     for (int i = 0; i < 100; i++)
-                        writer.write(new MarshalledEntryImpl(k(m, i), v(m, i), null, marshaller()));
-                  } catch (Exception e) {
-                     log.error("Error storing entry", e);
-                  }
-                  done.countDown();
+            t = fork(() -> {
+               try {
+                  for (int i = 0; i < 100; i++)
+                     writer.write(new MarshalledEntryImpl(k(m, i), v(m, i), null, marshaller()));
+               } catch (Exception e) {
+                  log.error("Error storing entry", e);
                }
-            };
-            t.start();
+               done.countDown();
+            });
 
-            assertFalse("Background thread should have blocked after adding 10 entries", done.await(1, TimeUnit.SECONDS));
+            assertFalse("Background thread should have blocked after adding 10 entries",
+                        done.await(1, TimeUnit.SECONDS));
          } finally {
             underlying.lock.unlock();
          }
       } finally {
          writer.stop();
       }
+      t.get(10, TimeUnit.SECONDS);
       assertEquals(3, underlying.threads.size());
    }
 

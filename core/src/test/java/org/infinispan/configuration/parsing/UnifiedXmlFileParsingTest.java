@@ -261,7 +261,7 @@ public class UnifiedXmlFileParsingTest extends AbstractInfinispanTest {
 
             threadFactory = getGlobalConfiguration(holder).asyncThreadPool().threadFactory();
             assertEquals("infinispan", threadFactory.threadGroup().getName());
-            assertEquals("%G %i", threadFactory.threadNamePattern());
+            assertEquals("thread-%c-%n-p%f-t%t", threadFactory.threadNamePattern());
             assertEquals(5, threadFactory.initialPriority());
             threadPool = getGlobalConfiguration(holder).asyncThreadPool().threadPoolFactory();
             assertEquals(5, threadPool.coreThreads());
@@ -271,7 +271,7 @@ public class UnifiedXmlFileParsingTest extends AbstractInfinispanTest {
 
             threadFactory = getGlobalConfiguration(holder).stateTransferThreadPool().threadFactory();
             assertEquals("infinispan", threadFactory.threadGroup().getName());
-            assertEquals("%G %i", threadFactory.threadNamePattern());
+            assertEquals("thread-%c-%n-p%f-t%t", threadFactory.threadNamePattern());
             assertEquals(5, threadFactory.initialPriority());
             threadPool = getGlobalConfiguration(holder).stateTransferThreadPool().threadPoolFactory();
             assertEquals(1, threadPool.coreThreads());
@@ -329,7 +329,7 @@ public class UnifiedXmlFileParsingTest extends AbstractInfinispanTest {
 
             threadFactory = getGlobalConfiguration(holder).listenerThreadPool().threadFactory();
             assertEquals("infinispan", threadFactory.threadGroup().getName());
-            assertEquals("%G %i", threadFactory.threadNamePattern());
+            assertEquals("thread-%c-%n-p%f-t%t", threadFactory.threadNamePattern());
             assertEquals(5, threadFactory.initialPriority());
             threadPool = getGlobalConfiguration(holder).listenerThreadPool().threadPoolFactory();
             assertEquals(1, threadPool.coreThreads());
@@ -340,7 +340,7 @@ public class UnifiedXmlFileParsingTest extends AbstractInfinispanTest {
             assertTrue(getGlobalConfiguration(holder).expirationThreadPool().threadPoolFactory() instanceof ScheduledThreadPoolExecutorFactory);
             threadFactory = getGlobalConfiguration(holder).expirationThreadPool().threadFactory();
             assertEquals("infinispan", threadFactory.threadGroup().getName());
-            assertEquals("%G %i", threadFactory.threadNamePattern());
+            assertEquals("thread-%c-%n-p%f-t%t", threadFactory.threadNamePattern());
             assertEquals(5, threadFactory.initialPriority());
 
             ThreadPoolExecutorFactory threadPoolExecutorFactory = getGlobalConfiguration(holder).replicationQueueThreadPool().threadPoolFactory();
@@ -348,19 +348,19 @@ public class UnifiedXmlFileParsingTest extends AbstractInfinispanTest {
                assertTrue(threadPoolExecutorFactory instanceof ScheduledThreadPoolExecutorFactory);
                threadFactory = getGlobalConfiguration(holder).replicationQueueThreadPool().threadFactory();
                assertEquals("infinispan", threadFactory.threadGroup().getName());
-               assertEquals("%G %i", threadFactory.threadNamePattern());
+               assertEquals("thread-%c-%n-p%f-t%t", threadFactory.threadNamePattern());
                assertEquals(5, threadFactory.initialPriority());
             }
 
             threadFactory = getGlobalConfiguration(holder).transport().remoteCommandThreadPool().threadFactory();
             assertEquals("infinispan", threadFactory.threadGroup().getName());
-            assertEquals("%G %i", threadFactory.threadNamePattern());
+            assertEquals("thread-%c-%n-p%f-t%t", threadFactory.threadNamePattern());
             assertEquals(5, threadFactory.initialPriority());
             assertTrue(getGlobalConfiguration(holder).transport().remoteCommandThreadPool().threadPoolFactory() instanceof CachedThreadPoolExecutorFactory);
 
             threadFactory = getGlobalConfiguration(holder).transport().transportThreadPool().threadFactory();
             assertEquals("infinispan", threadFactory.threadGroup().getName());
-            assertEquals("%G %i", threadFactory.threadNamePattern());
+            assertEquals("thread-%c-%n-p%f-t%t", threadFactory.threadNamePattern());
             assertEquals(5, threadFactory.initialPriority());
             threadPool = getGlobalConfiguration(holder).transport().transportThreadPool().threadPoolFactory();
             assertEquals(5, threadPool.coreThreads());

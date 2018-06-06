@@ -8,13 +8,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.infinispan.Cache;
 import org.infinispan.configuration.cache.SingletonStoreConfiguration;
 import org.infinispan.container.DataContainer;
+import org.infinispan.factories.threads.DefaultThreadFactory;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.infinispan.marshall.core.MarshalledEntry;
 import org.infinispan.notifications.Listener;
@@ -63,7 +63,7 @@ public class SingletonCacheWriter extends DelegatingCacheWriter {
    /**
     * Executor service used to submit tasks to push in-memory state.
     */
-   protected final ExecutorService executor;
+   protected ExecutorService executor;
 
    /**
     * Future result of the in-memory push state task. This allows SingletonStore to check whether there's any push taks
@@ -86,17 +86,19 @@ public class SingletonCacheWriter extends DelegatingCacheWriter {
 
    public SingletonCacheWriter(CacheWriter actual, SingletonStoreConfiguration singletonConfiguration) {
       super(actual);
-      executor = Executors.newSingleThreadExecutor(new ThreadFactory() {
-         @Override
-         public Thread newThread(Runnable r) {
-            return new Thread(r, THREAD_NAME);
-         }
-      });
       this.singletonConfiguration = singletonConfiguration;
    }
 
    @Override
    public void start() {
+      Cache cache = ctx.getCache();
+      String nodeName =
+         cache != null ? cache.getCacheManager().getCacheManagerConfiguration().transport().nodeName() : null;
+      DefaultThreadFactory pusherThreadFactory =
+         new DefaultThreadFactory(null, Thread.NORM_PRIORITY, DefaultThreadFactory.DEFAULT_PATTERN, nodeName,
+                                  THREAD_NAME);
+      executor = Executors.newSingleThreadExecutor(pusherThreadFactory);
+
       ctx.getCache().getCacheManager().addListener(new SingletonStoreListener());
    }
 

@@ -468,7 +468,7 @@ public class XmlFileParsingTest extends AbstractInfinispanTest {
       assertEquals(10000, listenerThreadPool.queueLength());
       DefaultThreadFactory listenerThreadFactory =
          gc.listenerThreadPool().threadFactory();
-      assertEquals("AsyncListenerThread", listenerThreadFactory.threadNamePattern());
+      assertEquals("TF1-%c-%n-p%f-t%t", listenerThreadFactory.threadNamePattern());
 
       BlockingThreadPoolExecutorFactory persistenceThreadPool =
          gc.persistenceThreadPool().threadPoolFactory();
@@ -476,7 +476,7 @@ public class XmlFileParsingTest extends AbstractInfinispanTest {
       assertEquals(10001, persistenceThreadPool.queueLength());
       DefaultThreadFactory persistenceThreadFactory =
          gc.persistenceThreadPool().threadFactory();
-      assertEquals("PersistenceThread", persistenceThreadFactory.threadNamePattern());
+      assertEquals("TF2-%c-%n-p%f-t%t", persistenceThreadFactory.threadNamePattern());
 
       BlockingThreadPoolExecutorFactory asyncThreadPool =
          gc.asyncThreadPool().threadPoolFactory();
@@ -509,7 +509,7 @@ public class XmlFileParsingTest extends AbstractInfinispanTest {
 
       DefaultThreadFactory evictionThreadFactory =
          gc.expirationThreadPool().threadFactory();
-      assertEquals("ExpirationThread", evictionThreadFactory.threadNamePattern());
+      assertEquals("TF2-%c-%n-p%f-t%t", evictionThreadFactory.threadNamePattern());
 
       assertTrue(gc.transport().transport() instanceof JGroupsTransport);
       assertEquals("infinispan-cluster", gc.transport().clusterName());

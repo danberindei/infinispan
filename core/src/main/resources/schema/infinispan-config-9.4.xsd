@@ -88,8 +88,11 @@
                  %t - emit the per-factory thread sequence number
                  %g - emit the global thread sequence number
                  %f - emit the factory sequence number
+                 %p - emit the ":"-separated thread group path
                  %i - emit the thread ID
                  %G - emit the thread group name
+                 %n - emit the node name
+                 %c - emit the component name
                     ]]>
             </xs:documentation>
           </xs:annotation>

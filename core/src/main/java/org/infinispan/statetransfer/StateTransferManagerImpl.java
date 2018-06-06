@@ -84,11 +84,11 @@ public class StateTransferManagerImpl implements StateTransferManager {
    @Start(priority = 60)
    @Override
    public void start() throws Exception {
+      this.cacheName = cache.getName();
       if (trace) {
          log.tracef("Starting StateTransferManager of cache %s on node %s", cacheName, rpcManager.getAddress());
       }
 
-      this.cacheName = cache.getName();
       if (globalStateManager != null) {
          persistentStateChecksum = globalStateManager.readScopedState(cacheName).map(ScopedPersistentState::getChecksum);
       } else {

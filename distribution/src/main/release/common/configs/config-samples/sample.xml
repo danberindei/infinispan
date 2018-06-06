@@ -55,7 +55,7 @@
 
    <!--
       <threads>
-         <thread-factory name="infinispan-factory" group-name="infinispan" thread-name-pattern="%G %i" priority="5"/>
+         <thread-factory name="infinispan-factory" group-name="infinispan" thread-name-pattern="thread-%c-%n-p%f-t%t" priority="5"/>
          <cached-thread-pool name="infinispan-cached" thread-factory="infinispan-factory" />
          <blocking-bounded-queue-thread-pool name="infinispan-listener" thread-factory="infinispan-factory" core-threads="1" max-threads="1" queue-length="0" keepalive-time="0" />
          <blocking-bounded-queue-thread-pool name="state-transfer" thread-factory="infinispan-factory" core-threads="1" max-threads="50" queue-length="0" keepalive-time="0" />

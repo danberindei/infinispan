@@ -1,6 +1,8 @@
 package org.infinispan.tx;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import javax.transaction.Transaction;
 import javax.transaction.TransactionManager;
@@ -8,6 +10,7 @@ import javax.transaction.TransactionManager;
 import org.infinispan.Cache;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.manager.EmbeddedCacheManager;
+import org.infinispan.test.ExceptionRunnable;
 import org.infinispan.test.SingleCacheManagerTest;
 import org.infinispan.test.fwk.TestCacheManagerFactory;
 import org.infinispan.transaction.lookup.EmbeddedTransactionManagerLookup;
@@ -59,7 +62,7 @@ public class StaleLockAfterTxAbortTest extends SingleCacheManagerTest {
 
       TxThread transactionThread = new TxThread(cache, txStartedLatch);
 
-      transactionThread.start();
+      Future<Void> future = fork(transactionThread);
       txStartedLatch.countDown();
       Thread.sleep(500); // in case the thread needs some time to get to the locking code
 
@@ -70,12 +73,12 @@ public class StaleLockAfterTxAbortTest extends SingleCacheManagerTest {
       // now release the lock
       tm().resume(transaction);
       transaction.runCommit(true);
-      transactionThread.join();
+      future.get(10, TimeUnit.SECONDS);
 
       assertEventuallyNotLocked(cache, k);
    }
 
-   private class TxThread extends Thread {
+   private class TxThread implements ExceptionRunnable {
       final Cache<Object, Object> cache;
       volatile Transaction tx;
       volatile Exception exception;
