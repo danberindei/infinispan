@@ -29,6 +29,7 @@ import org.infinispan.topology.LocalTopologyManager;
 import org.infinispan.topology.ManagerStatusResponse;
 import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
+import org.testng.annotations.Test;
 
 public abstract class BaseMergePolicyTest extends BasePartitionHandlingTest {
 
@@ -120,6 +121,7 @@ public abstract class BaseMergePolicyTest extends BasePartitionHandlingTest {
       assertEquals(0, cm.getConflicts().count());
    }
 
+   @Test(invocationCount = 10)
    public void testPartitionMergePolicy() throws Exception {
       if (trace) log.tracef("beforeSplit()");
       beforeSplit();
