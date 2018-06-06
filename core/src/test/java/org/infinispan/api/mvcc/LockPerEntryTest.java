@@ -3,6 +3,8 @@ package org.infinispan.api.mvcc;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.manager.EmbeddedCacheManager;
@@ -37,38 +39,34 @@ public class LockPerEntryTest extends SingleCacheManagerTest {
       final int numLoops = 1000;
       final List<Exception> exceptions = new LinkedList<>();
 
-      Thread[] t = new Thread[NUM_THREADS];
+      Future[] futures = new Future[NUM_THREADS];
       for (int i = 0; i < NUM_THREADS; i++)
-         t[i] = new Thread() {
-            @Override
-            public void run() {
+         futures[i] = fork(() -> {
+            try {
+               l.await();
+            }
+            catch (Exception e) {
+               // ignore
+            }
+            for (int i1 = 0; i1 < numLoops; i1++) {
                try {
-                  l.await();
+                  switch (i1 % 2) {
+                     case 0:
+                        cache.put("Key" + i1, "v");
+                        break;
+                     case 1:
+                        cache.remove("Key" + i1);
+                        break;
+                  }
                }
                catch (Exception e) {
-                  // ignore
-               }
-               for (int i = 0; i < numLoops; i++) {
-                  try {
-                     switch (i % 2) {
-                        case 0:
-                           cache.put("Key" + i, "v");
-                           break;
-                        case 1:
-                           cache.remove("Key" + i);
-                           break;
-                     }
-                  }
-                  catch (Exception e) {
-                     exceptions.add(e);
-                  }
+                  exceptions.add(e);
                }
             }
-         };
+         });
 
-      for (Thread th : t) th.start();
       l.countDown();
-      for (Thread th : t) th.join();
+      for (Future f : futures) f.get(30, TimeUnit.SECONDS);
 
       if (!exceptions.isEmpty()) throw exceptions.get(0);
       assertNoLocks();

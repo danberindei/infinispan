@@ -20,6 +20,7 @@ import org.infinispan.query.MassIndexer;
 import org.infinispan.query.Search;
 import org.infinispan.query.SearchManager;
 import org.infinispan.query.impl.massindex.IndexUpdater;
+import org.infinispan.test.ExceptionRunnable;
 import org.infinispan.test.MultipleCacheManagersTest;
 import org.infinispan.test.fwk.TestResourceTracker;
 
@@ -133,7 +134,7 @@ public class AsyncMassIndexPerfTest extends MultipleCacheManagersTest {
       stopTimer.stop();
       System.out.printf("\rData inserted in %d seconds.", stopTimer.getElapsedIn(TimeUnit.SECONDS));
       info();
-      new Thread(new EventLoop(massIndexer)).start();
+      fork(new EventLoop(massIndexer));
    }
 
    private void info() {
@@ -189,7 +190,7 @@ public class AsyncMassIndexPerfTest extends MultipleCacheManagersTest {
       searchManager.purge(Transaction.class);
    }
 
-   class EventLoop implements Runnable {
+   class EventLoop implements ExceptionRunnable {
 
       private MassIndexer massIndexer;
       private CompletableFuture<Void> future;

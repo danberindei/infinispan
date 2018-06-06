@@ -4,7 +4,11 @@ import static org.testng.AssertJUnit.assertEquals;
 import static org.testng.AssertJUnit.assertFalse;
 
 import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.transaction.RollbackException;
@@ -64,57 +68,54 @@ public class DummyTxTest extends SingleCacheManagerTest {
       final AtomicInteger didNothing = new AtomicInteger();
 
       final CountDownLatch latch = new CountDownLatch(1);
-      Thread[] threads = new Thread[numThreads];
+      List<Future<Void>> futures = new ArrayList<>(numThreads);
       for (int i = 0; i < numThreads; i++) {
-         threads[i] = new Thread("DummyTxTest.Remover-" + i) {
-            public void run() {
+         futures.add(fork(() -> {
+            try {
+               latch.await();
+
+               tm().begin();
                try {
-                  latch.await();
+                  boolean success;
+                  if (useConditionalRemove) {
+                     success = cache.remove("k1", "v1");
+                  } else {
+                     success = cache.remove("k1") != null;
+                  }
 
-                  tm().begin();
-                  try {
-                     boolean success;
-                     if (useConditionalRemove) {
-                        success = cache.remove("k1", "v1");
-                     } else {
-                        success = cache.remove("k1") != null;
-                     }
+                  log.trace("Remove call success: " + success);
+                  TestingUtil.sleepRandom(200);
+                  tm().commit();
 
-                     log.trace("Remove call success: " + success);
-                     TestingUtil.sleepRandom(200);
-                     tm().commit();
-
-                     if (success) {
-                        removed.incrementAndGet();
-                     }
-                     else {
-                        didNothing.incrementAndGet();
-                     }
-                  } catch (Throwable e) {
-                     if (e instanceof RollbackException) {
-                        rolledBack.incrementAndGet();
-                     } else if (tm().getTransaction() != null) {
-                        // the TX is most likely rolled back already, but we attempt a rollback just in case it isn't
-                        try {
-                           tm().rollback();
-                           rolledBack.incrementAndGet();
-                        } catch (SystemException e1) {
-                           log.error("Failed to rollback", e1);
-                        }
-                     }
-                     throw e;
+                  if (success) {
+                     removed.incrementAndGet();
+                  }
+                  else {
+                     didNothing.incrementAndGet();
                   }
                } catch (Throwable e) {
-                  log.error(e);
+                  if (e instanceof RollbackException) {
+                     rolledBack.incrementAndGet();
+                  } else if (tm().getTransaction() != null) {
+                     // the TX is most likely rolled back already, but we attempt a rollback just in case it isn't
+                     try {
+                        tm().rollback();
+                        rolledBack.incrementAndGet();
+                     } catch (SystemException e1) {
+                        log.error("Failed to rollback", e1);
+                     }
+                  }
+                  throw e;
                }
+            } catch (Throwable e) {
+               log.error(e);
             }
-         };
-         threads[i].start();
+         }));
       }
 
       latch.countDown();
-      for (Thread t : threads) {
-         t.join();
+      for (Future<Void> f : futures) {
+         f.get(10, TimeUnit.SECONDS);
       }
 
       log.trace("removed= " + removed.get());

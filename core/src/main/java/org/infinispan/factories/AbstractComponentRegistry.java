@@ -197,7 +197,7 @@ public abstract class AbstractComponentRegistry implements Lifecycle, Cloneable 
     * @param type      type of component
     */
    public synchronized final void registerComponent(Object component, Class<?> type) {
-      registerComponent(component, type.getName(), type.equals(component.getClass()));
+      registerComponent(component, type.getName(), true);
    }
 
    public synchronized final void registerComponent(Object component, String name) {
@@ -493,7 +493,7 @@ public abstract class AbstractComponentRegistry implements Lifecycle, Cloneable 
    /**
     * Get the component from a wrapper, properly handling <code>null</code> components.
     */
-   private Object unwrapComponent(Component wrapper) {
+   protected Object unwrapComponent(Component wrapper) {
       return wrapper.instance == NULL_COMPONENT ? null : wrapper.instance;
    }
 

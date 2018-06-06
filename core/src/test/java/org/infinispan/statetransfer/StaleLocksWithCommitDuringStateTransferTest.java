@@ -1,6 +1,7 @@
 package org.infinispan.statetransfer;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import org.infinispan.Cache;
@@ -79,32 +80,28 @@ public class StaleLocksWithCommitDuringStateTransferTest extends MultipleCacheMa
       txCoordinator.prepare(localTx);
 
       final CountDownLatch commitLatch = new CountDownLatch(1);
-      Thread worker = new Thread("RehasherSim,StaleLocksWithCommitDuringStateTransferTest") {
-         @Override
-         public void run() {
+      Future<Void> worker = fork(() -> {
+         try {
+            // Before calling commit we block transactions on one of the nodes to simulate a state transfer
+            final StateTransferLock blockFirst = TestingUtil.extractComponent(failOnOriginator ? c1 : c2, StateTransferLock.class);
+            final StateTransferLock blockSecond = TestingUtil.extractComponent(failOnOriginator ? c2 : c1, StateTransferLock.class);
+
             try {
-               // Before calling commit we block transactions on one of the nodes to simulate a state transfer
-               final StateTransferLock blockFirst = TestingUtil.extractComponent(failOnOriginator ? c1 : c2, StateTransferLock.class);
-               final StateTransferLock blockSecond = TestingUtil.extractComponent(failOnOriginator ? c2 : c1, StateTransferLock.class);
+               blockFirst.acquireExclusiveTopologyLock();
+               blockSecond.acquireExclusiveTopologyLock();
 
-               try {
-                  blockFirst.acquireExclusiveTopologyLock();
-                  blockSecond.acquireExclusiveTopologyLock();
+               commitLatch.countDown();
 
-                  commitLatch.countDown();
-
-                  // should be much larger than the lock acquisition timeout
-                  Thread.sleep(1000);
-               } finally {
-                  blockSecond.releaseExclusiveTopologyLock();
-                  blockFirst.releaseExclusiveTopologyLock();
-               }
-            } catch (Throwable t) {
-               log.errorf(t, "Error blocking/unblocking transactions");
+               // should be much larger than the lock acquisition timeout
+               Thread.sleep(1000);
+            } finally {
+               blockSecond.releaseExclusiveTopologyLock();
+               blockFirst.releaseExclusiveTopologyLock();
             }
+         } catch (Throwable t) {
+            log.errorf(t, "Error blocking/unblocking transactions");
          }
-      };
-      worker.start();
+      });
 
       commitLatch.await(10, TimeUnit.SECONDS);
 
@@ -120,7 +117,7 @@ public class StaleLocksWithCommitDuringStateTransferTest extends MultipleCacheMa
          tm(c1).suspend();
       } finally {
          // don't leak threads
-         worker.join();
+         worker.get(10, TimeUnit.SECONDS);
       }
 
       // test that we don't leak locks
@@ -170,20 +167,16 @@ public class StaleLocksWithCommitDuringStateTransferTest extends MultipleCacheMa
       }, StateTransferInterceptor.class);
 
       // Schedule the remote node to stop on another thread since the main thread will be busy with the commit call
-      Thread worker = new Thread("RehasherSim,StaleLocksWithCommitDuringStateTransferTest") {
-         @Override
-         public void run() {
-            try {
-               // should be much larger than the lock acquisition timeout
-               Thread.sleep(1000);
-               manager(c2).stop();
-               // stLock.unblockNewTransactions(1000);
-            } catch (InterruptedException e) {
-               log.errorf(e, "Error stopping cache");
-            }
+      Future<Void> worker = fork(() -> {
+         try {
+            // should be much larger than the lock acquisition timeout
+            Thread.sleep(1000);
+            manager(c2).stop();
+            // stLock.unblockNewTransactions(1000);
+         } catch (InterruptedException e) {
+            log.errorf(e, "Error stopping cache");
          }
-      };
-      worker.start();
+      });
 
       try {
          // finally commit or rollback the transaction
@@ -197,7 +190,7 @@ public class StaleLocksWithCommitDuringStateTransferTest extends MultipleCacheMa
          tm(c1).suspend();
       } finally {
          // don't leak threads
-         worker.join();
+         worker.get(10, TimeUnit.SECONDS);
       }
 
       // test that we don't leak locks

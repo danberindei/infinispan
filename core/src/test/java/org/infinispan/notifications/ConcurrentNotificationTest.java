@@ -1,8 +1,8 @@
 package org.infinispan.notifications;
 
-import java.util.LinkedList;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.infinispan.Cache;
@@ -45,57 +45,28 @@ public class ConcurrentNotificationTest extends AbstractInfinispanTest {
    }
 
    public void testThreads() throws Exception {
-      Thread workers[] = new Thread[20];
-      final List<Exception> exceptions = new LinkedList<Exception>();
+      Future[] workers = new Future[20];
       final int loops = 100;
       final CountDownLatch latch = new CountDownLatch(1);
 
       for (int i = 0; i < workers.length; i++) {
-         workers[i] = new Thread() {
-            @Override
-            public void run() {
-               try {
-                  latch.await();
-               }
-               catch (InterruptedException e) {
-               }
+         workers[i] = fork(() -> {
+            latch.await();
 
-               for (int j = 0; j < loops; j++) {
-                  try {
-                     cache.put("key", "value");
-                  }
-                  catch (Exception e) {
-                     exceptions.add(new Exception("Caused on thread " + getName() + " in loop " + j + " when doing a put()", e));
-                  }
+            for (int j = 0; j < loops; j++) {
+               cache.put("key", "value");
 
-                  try {
-                     cache.remove("key");
-                  }
-                  catch (Exception e) {
-                     exceptions.add(new Exception("Caused on thread " + getName() + " in loop " + j + " when doing a remove()", e));
-                  }
+               cache.remove("key");
 
-                  try {
-                     cache.get("key");
-                  }
-                  catch (Exception e) {
-                     log.error("Exception received!", e);
-                     exceptions.add(new Exception("Caused on thread " + getName() + " in loop " + j + " when doing a get()", e));
-                  }
-               }
+               cache.get("key");
             }
-         };
-
-         workers[i].start();
+         });
       }
 
       latch.countDown();
 
-      for (Thread t : workers)
-         t.join();
-
-      for (Exception e : exceptions)
-         throw e;
+      for (Future f : workers)
+         f.get(30, TimeUnit.SECONDS);
 
       // we cannot ascertain the exact number of invocations on the replListener since some removes would mean that other
       // gets would miss.  And this would cause no notification to fire for that get.  And we cannot be sure of the

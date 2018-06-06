@@ -1,6 +1,7 @@
 package org.infinispan.partitionhandling.impl;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.infinispan.partitionhandling.AvailabilityMode.AVAILABLE;
 import static org.infinispan.partitionhandling.impl.PreferAvailabilityStrategyTest.ConflictResolution.IGNORE;
@@ -14,16 +15,19 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.testng.AssertJUnit.assertEquals;
 import static org.testng.AssertJUnit.assertSame;
 import static org.testng.AssertJUnit.assertTrue;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.infinispan.commons.hash.MurmurHash3;
 import org.infinispan.configuration.cache.CacheMode;
 import org.infinispan.distribution.TestAddress;
+import org.infinispan.distribution.ch.ConsistentHash;
 import org.infinispan.distribution.ch.impl.DefaultConsistentHashFactory;
 import org.infinispan.remoting.transport.Address;
 import org.infinispan.test.AbstractInfinispanTest;
@@ -463,6 +467,48 @@ public class PreferAvailabilityStrategyTest extends AbstractInfinispanTest {
          verify(context).queueRebalance(mergeMembers);
       } else {
          verify(context).queueConflictResolution(expectedCache.topology(), setOf(B, C));
+      }
+      verifyNoMoreInteractions(context);
+   }
+
+   public void testMerge3IndependentNodes() {
+      // A, B, C all start independently and merge in the same view
+      List<Address> mergeMembers = asList(A, B, C);
+      TestClusterCacheStatus cacheA = start(JOIN_INFO, A);
+      TestClusterCacheStatus cacheB = start(JOIN_INFO, B);
+      TestClusterCacheStatus cacheC = start(JOIN_INFO, C);
+      CacheStatusResponse responseA = availableResponse(A, cacheA);
+      CacheStatusResponse responseB = availableResponse(B, cacheB);
+      CacheStatusResponse responseC = availableResponse(C, cacheC);
+      Map<Address, CacheStatusResponse> statusResponses = mapOf(A, responseA, B, responseB, C, responseC);
+      assertEquals(cacheA.topology().getTopologyId(),  cacheB.topology().getTopologyId());
+      assertEquals(cacheA.topology().getTopologyId(),  cacheC.topology().getTopologyId());
+
+      when(context.getExpectedMembers()).thenReturn(mergeMembers);
+      when(context.resolveConflictsOnMerge()).thenReturn(conflicts.resolve());
+      when(context.getCacheName()).thenReturn(CACHE_NAME);
+      if (conflicts.resolve()) {
+         Set<ConsistentHash> distinctHashes = setOf(cacheA.readConsistentHash(), cacheB.readConsistentHash(),
+                                                    cacheC.readConsistentHash());
+         when(context.calculateConflictHash(cacheA.readConsistentHash(), distinctHashes, mergeMembers))
+            .thenReturn(conflictResolutionConsistentHash(cacheA, cacheB, cacheC));
+      }
+
+      strategy.onPartitionMerge(context, statusResponses);
+
+      TestClusterCacheStatus expectedCache = cacheA.copy();
+      if (conflicts.resolve()) {
+         expectedCache.startConflictResolution(conflictResolutionConsistentHash(cacheA, cacheB, cacheC), A, B, C);
+      } else {
+         expectedCache.incrementIds();
+      }
+      expectedCache.incrementIdsIfNeeded(cacheA);
+      verify(context).updateTopologiesAfterMerge(expectedCache.topology(), expectedCache.stableTopology(), null);
+      verify(context).updateCurrentTopology(expectedCache.topology().getMembers());
+      if (!conflicts.resolve()) {
+         verify(context).queueRebalance(mergeMembers);
+      } else {
+         verify(context).queueConflictResolution(expectedCache.topology(), singleton(A));
       }
       verifyNoMoreInteractions(context);
    }

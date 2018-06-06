@@ -9,7 +9,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
-
 import javax.transaction.HeuristicRollbackException;
 import javax.transaction.RollbackException;
 import javax.transaction.Transaction;
@@ -23,6 +22,7 @@ import org.infinispan.notifications.cachelistener.annotation.CacheEntryCreated;
 import org.infinispan.notifications.cachelistener.annotation.CacheEntryModified;
 import org.infinispan.notifications.cachelistener.event.CacheEntryEvent;
 import org.infinispan.notifications.cachelistener.event.CacheEntryModifiedEvent;
+import org.infinispan.test.Exceptions;
 import org.infinispan.test.MultipleCacheManagersTest;
 import org.infinispan.test.fwk.TestCacheManagerFactory;
 import org.infinispan.transaction.LockingMode;
@@ -83,7 +83,8 @@ public class InvocationContextTest extends MultipleCacheManagersTest {
       Transaction tx = tm.suspend();
       final List<Throwable> throwables = new LinkedList<>();
 
-      Thread th = new Thread(() -> {
+      // Need an explicit thread because Future.cancel() could cancel the task before it even started running
+      Thread th = getTestThreadFactory("Fork").newThread(() -> {
          try {
             cache.put("k", "v3");
          } catch (Throwable th1) {
@@ -99,8 +100,7 @@ public class InvocationContextTest extends MultipleCacheManagersTest {
       tm.rollback();
 
       assertEquals(1, throwables.size());
-      assertTrue(throwables.get(0) instanceof CacheException);
-      assertTrue(throwables.get(0).getCause() instanceof InterruptedException);
+      Exceptions.assertException(CacheException.class, InterruptedException.class, throwables.get(0));
    }
 
 

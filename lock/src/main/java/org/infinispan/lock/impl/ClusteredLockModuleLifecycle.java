@@ -2,7 +2,8 @@ package org.infinispan.lock.impl;
 
 import java.util.EnumSet;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 
 import org.infinispan.Cache;
 import org.infinispan.commons.marshall.AdvancedExternalizer;
@@ -11,6 +12,7 @@ import org.infinispan.configuration.cache.Configuration;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.configuration.global.GlobalConfiguration;
 import org.infinispan.factories.GlobalComponentRegistry;
+import org.infinispan.factories.KnownComponentNames;
 import org.infinispan.jmx.CacheManagerJmxRegistration;
 import org.infinispan.lifecycle.ModuleLifecycle;
 import org.infinispan.lock.api.ClusteredLockManager;
@@ -59,7 +61,8 @@ public class ClusteredLockModuleLifecycle implements ModuleLifecycle {
       internalCacheRegistry.registerInternalCache(CLUSTERED_LOCK_CACHE_NAME, createClusteredLockCacheConfiguration(),
             EnumSet.of(InternalCacheRegistry.Flag.EXCLUSIVE));
 
-      CompletableFuture<CacheHolder> future = startCaches(cacheManager);
+      ExecutorService executor = gcr.getComponent(KnownComponentNames.ASYNC_OPERATIONS_EXECUTOR);
+      Future<CacheHolder> future = startCaches(cacheManager, executor);
       registerClusteredLockManager(gcr, future);
    }
 
@@ -73,21 +76,16 @@ public class ClusteredLockModuleLifecycle implements ModuleLifecycle {
       return builder.build();
    }
 
-   private static CompletableFuture<CacheHolder> startCaches(EmbeddedCacheManager cacheManager) {
-      final CompletableFuture<CacheHolder> future = new CompletableFuture<>();
-      new Thread(() -> {
-         try {
-            Cache<? extends ClusteredLockKey, ClusteredLockValue> locksCache = cacheManager.getCache(CLUSTERED_LOCK_CACHE_NAME);
-            future.complete(
-                  new CacheHolder(locksCache.getAdvancedCache()));
-         } catch (Throwable throwable) {
-            future.completeExceptionally(throwable);
-         }
-      }).start();
-      return future;
+   private static Future<CacheHolder> startCaches(EmbeddedCacheManager cacheManager,
+                                                  ExecutorService executor) {
+      return executor.submit(() -> {
+         Cache<? extends ClusteredLockKey, ClusteredLockValue> locksCache = cacheManager.getCache(CLUSTERED_LOCK_CACHE_NAME);
+
+         return new CacheHolder(locksCache.getAdvancedCache());
+      });
    }
 
-   private static void registerClusteredLockManager(GlobalComponentRegistry registry, CompletableFuture<CacheHolder> future) {
+   private static void registerClusteredLockManager(GlobalComponentRegistry registry, Future<CacheHolder> future) {
       //noinspection SynchronizationOnLocalVariableOrMethodParameter
       synchronized (registry) {
          ClusteredLockManager clusteredLockManager = registry.getComponent(ClusteredLockManager.class);

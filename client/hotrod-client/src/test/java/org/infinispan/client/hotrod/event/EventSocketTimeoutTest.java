@@ -7,7 +7,7 @@ import static org.testng.AssertJUnit.assertTrue;
 import java.net.SocketTimeoutException;
 
 import org.infinispan.client.hotrod.RemoteCacheManager;
-import org.infinispan.client.hotrod.SocketTimeoutErrorTest.TimeoutInducingInterceptor;
+import org.infinispan.client.hotrod.TimeoutInducingInterceptor;
 import org.infinispan.client.hotrod.exceptions.HotRodClientException;
 import org.infinispan.client.hotrod.test.HotRodClientTestingUtil;
 import org.infinispan.client.hotrod.test.SingleHotRodServerTest;
@@ -27,7 +27,7 @@ public class EventSocketTimeoutTest extends SingleHotRodServerTest {
    protected EmbeddedCacheManager createCacheManager() throws Exception {
       ConfigurationBuilder builder = new ConfigurationBuilder();
       builder.customInterceptors().addInterceptor().interceptor(
-         new TimeoutInducingInterceptor()).after(EntryWrappingInterceptor.class);
+         new TimeoutInducingInterceptor(this)).after(EntryWrappingInterceptor.class);
       return TestCacheManagerFactory.createCacheManager(hotRodCacheConfiguration(builder));
    }
 

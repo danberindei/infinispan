@@ -1,10 +1,12 @@
 package org.infinispan.stress;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -22,6 +24,7 @@ import org.infinispan.marshall.core.MarshalledEntry;
 import org.infinispan.metadata.EmbeddedMetadata;
 import org.infinispan.metadata.Metadata;
 import org.infinispan.persistence.spi.PersistenceException;
+import org.infinispan.test.AbstractInfinispanTest;
 import org.infinispan.test.TestingUtil;
 import org.infinispan.util.DefaultTimeService;
 import org.infinispan.util.TimeService;
@@ -37,7 +40,7 @@ import org.testng.annotations.Test;
  */
 @Test(testName = "stress.DataContainerStressTest", groups = "stress",
       description = "Disabled by default, designed to be run manually.", timeOut = 15*60*1000)
-public class DataContainerStressTest {
+public class DataContainerStressTest extends AbstractInfinispanTest {
    volatile CountDownLatch latch;
    final int RUN_TIME_MILLIS = 45 * 1000; // 1 min
    final int WARMUP_TIME_MILLIS = 10 * 1000; // 10 sec
@@ -48,20 +51,20 @@ public class DataContainerStressTest {
 
    private static final Log log = LogFactory.getLog(DataContainerStressTest.class);
 
-   public void testSimpleDataContainer() throws InterruptedException {
+   public void testSimpleDataContainer() throws Exception {
       DefaultDataContainer dc = DefaultDataContainer.unBoundedDataContainer(5000);
       initializeDefaultDataContainer(dc);
       doTest(dc);
    }
 
-   public void testEntryBoundedDataContainer() throws InterruptedException {
+   public void testEntryBoundedDataContainer() throws Exception {
       DefaultDataContainer dc = DefaultDataContainer.boundedDataContainer(5000, NUM_KEYS - NUM_KEYS / 4,
             EvictionType.COUNT);
       initializeDefaultDataContainer(dc);
       doTest(dc);
    }
 
-   public void testMemoryBoundedDataContainer() throws InterruptedException {
+   public void testMemoryBoundedDataContainer() throws Exception {
       // The key length could be 4 or 5 (90% of the time it will be 5)
       // The value length could be 6 or 7 (90% of the time it will be 7)
       DefaultDataContainer dc = DefaultDataContainer.boundedDataContainer(5000, threeQuarterMemorySize(NUM_KEYS, 5, 20),
@@ -183,92 +186,82 @@ public class DataContainerStressTest {
       return total - total / 4;
    }
 
-   private void doTest(final DataContainer dc) throws InterruptedException {
+   private void doTest(final DataContainer dc) throws Exception {
       doTest(dc, true);
       doTest(dc, false);
    }
 
-   private void doTest(final DataContainer dc, boolean warmup) throws InterruptedException {
+   private void doTest(final DataContainer dc, boolean warmup) throws Exception {
       latch = new CountDownLatch(1);
       final byte[] keyFirstBytes = new byte[4];
       final Map<String, String> perf = new ConcurrentSkipListMap<String, String>();
       final AtomicBoolean run = new AtomicBoolean(true);
       final int actual_num_loops = warmup ? warmup_num_loops : num_loops;
 
-      Thread getter = new Thread() {
-         @Override
-         public void run() {
-            ThreadLocalRandom R = ThreadLocalRandom.current();
-            waitForStart();
-            long start = System.nanoTime();
-            int runs = 0;
-            byte[] captureByte = new byte[1];
-            byte[] key = Arrays.copyOf(keyFirstBytes, 5);
-            while (use_time && run.get() || runs < actual_num_loops) {
+      Future<Void> getter = fork(() -> {
+         ThreadLocalRandom R = ThreadLocalRandom.current();
+         waitForStart();
+         long start = System.nanoTime();
+         int runs = 0;
+         byte[] captureByte = new byte[1];
+         byte[] key = Arrays.copyOf(keyFirstBytes, 5);
+         while (use_time && run.get() || runs < actual_num_loops) {
 //               if (runs % 100000 == 0) log.info("GET run # " + runs);
 //               TestingUtil.sleepThread(10);
-               R.nextBytes(captureByte);
-               key[4] = captureByte[0];
-               dc.get(key);
-               runs++;
-            }
-            perf.put("GET", opsPerMS(System.nanoTime() - start, runs));
+            R.nextBytes(captureByte);
+            key[4] = captureByte[0];
+            dc.get(key);
+            runs++;
          }
-      };
+         perf.put("GET", opsPerMS(System.nanoTime() - start, runs));
+      });
 
-      Thread putter = new Thread() {
-         @Override
-         public void run() {
-            ThreadLocalRandom R = ThreadLocalRandom.current();
-            waitForStart();
-            long start = System.nanoTime();
-            int runs = 0;
-            byte[] captureByte = new byte[1];
-            byte[] key = Arrays.copyOf(keyFirstBytes, 5);
-            byte[] value = new byte[20];
-            Metadata metadata = new EmbeddedMetadata.Builder().build();
-            while (use_time && run.get() || runs < actual_num_loops) {
+      Future<Void> putter = fork(() -> {
+         ThreadLocalRandom R = ThreadLocalRandom.current();
+         waitForStart();
+         long start = System.nanoTime();
+         int runs = 0;
+         byte[] captureByte = new byte[1];
+         byte[] key = Arrays.copyOf(keyFirstBytes, 5);
+         byte[] value = new byte[20];
+         Metadata metadata = new EmbeddedMetadata.Builder().build();
+         while (use_time && run.get() || runs < actual_num_loops) {
 //               if (runs % 100000 == 0) log.info("PUT run # " + runs);
 //               TestingUtil.sleepThread(10);
-               R.nextBytes(captureByte);
-               key[4] = captureByte[0];
-               R.nextBytes(value);
-               dc.put(key, value, metadata);
-               runs++;
-            }
-            perf.put("PUT", opsPerMS(System.nanoTime() - start, runs));
+            R.nextBytes(captureByte);
+            key[4] = captureByte[0];
+            R.nextBytes(value);
+            dc.put(key, value, metadata);
+            runs++;
          }
-      };
+         perf.put("PUT", opsPerMS(System.nanoTime() - start, runs));
+      });
 
-      Thread remover = new Thread() {
-         @Override
-         public void run() {
-            ThreadLocalRandom R = ThreadLocalRandom.current();
-            waitForStart();
-            long start = System.nanoTime();
-            int runs = 0;
-            byte[] captureByte = new byte[1];
-            byte[] key = Arrays.copyOf(keyFirstBytes, 5);
-            while (use_time && run.get() || runs < actual_num_loops) {
+      Future<Void> remover = fork(() -> {
+         ThreadLocalRandom R = ThreadLocalRandom.current();
+         waitForStart();
+         long start = System.nanoTime();
+         int runs = 0;
+         byte[] captureByte = new byte[1];
+         byte[] key = Arrays.copyOf(keyFirstBytes, 5);
+         while (use_time && run.get() || runs < actual_num_loops) {
 //               if (runs % 100000 == 0) log.info("REM run # " + runs);
 //               TestingUtil.sleepThread(10);
-               R.nextBytes(captureByte);
-               key[4] = captureByte[0];
-               dc.remove(key);
-               runs++;
-            }
-            perf.put("REM", opsPerMS(System.nanoTime() - start, runs));
+            R.nextBytes(captureByte);
+            key[4] = captureByte[0];
+            dc.remove(key);
+            runs++;
          }
-      };
+         perf.put("REM", opsPerMS(System.nanoTime() - start, runs));
+      });
 
-      Thread[] threads = {getter, putter, remover};
-      for (Thread t : threads) t.start();
+      List<Future<Void>> futures = Arrays.asList(getter, putter, remover);
       latch.countDown();
 
       // wait some time
       Thread.sleep(warmup ? WARMUP_TIME_MILLIS : RUN_TIME_MILLIS);
       run.set(false);
-      for (Thread t : threads) t.join();
+      for (Future<Void> f : futures) f.get(10, TimeUnit.SECONDS);
       if (!warmup) log.warnf("%s: Performance: %s", dc.getClass().getSimpleName(), perf);
    }
 

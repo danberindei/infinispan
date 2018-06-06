@@ -4,10 +4,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.infinispan.test.AbstractInfinispanTest;
 import org.infinispan.util.concurrent.BlockingRunnable;
@@ -23,8 +21,6 @@ import org.testng.annotations.Test;
  */
 @Test(groups = "functional", testName = "executors.BlockingTaskAwareExecutorServiceTest")
 public class BlockingTaskAwareExecutorServiceTest extends AbstractInfinispanTest {
-
-   private static final AtomicInteger THREAD_ID = new AtomicInteger(0);
 
    public void testSimpleExecution() throws Exception {
       BlockingTaskAwareExecutorService executorService = createExecutorService();
@@ -79,16 +75,8 @@ public class BlockingTaskAwareExecutorServiceTest extends AbstractInfinispanTest
    private BlockingTaskAwareExecutorServiceImpl createExecutorService() {
       final String controllerName = "Controller-" + getClass().getSimpleName();
       final ExecutorService realOne = new ThreadPoolExecutor(1, 2, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
-                                                             new DummyThreadFactory());
+                                                             getTestThreadFactory("Remote"));
       return new BlockingTaskAwareExecutorServiceImpl(controllerName, realOne, TIME_SERVICE);
-   }
-
-   public static class DummyThreadFactory implements ThreadFactory {
-
-      @Override
-      public Thread newThread(Runnable runnable) {
-         return new Thread(runnable, "Remote-" + getClass().getSimpleName() + "-" + THREAD_ID.incrementAndGet());
-      }
    }
 
    public static class DoSomething implements BlockingRunnable {

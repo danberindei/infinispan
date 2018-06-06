@@ -2,6 +2,8 @@ package org.infinispan.tx;
 
 import static org.infinispan.test.TestingUtil.sleepThread;
 
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import javax.transaction.Status;
 import javax.transaction.TransactionManager;
 
@@ -10,6 +12,7 @@ import org.infinispan.configuration.cache.CacheMode;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.infinispan.remoting.transport.Address;
+import org.infinispan.test.ExceptionRunnable;
 import org.infinispan.test.MultipleCacheManagersTest;
 import org.infinispan.test.TestingUtil;
 import org.infinispan.test.fwk.CleanupAfterMethod;
@@ -36,24 +39,24 @@ public class RemoteLockCleanupStressTest extends MultipleCacheManagersTest {
       createClusteredCaches(2, c);
    }
 
-   public void testLockRelease() {
+   public void testLockRelease() throws Exception {
       final EmbeddedCacheManager cm1 = manager(0);
       final EmbeddedCacheManager cm2 = manager(1);
-      Thread t1 = new Thread(new CounterTask(cm1));
-      Thread t2 = new Thread(new CounterTask(cm2));
-
-      t1.start();
-      t2.start();
+      Future<Void> t1 = fork(new CounterTask(cm1));
+      Future<Void> t2 = fork(new CounterTask(cm2));
 
       sleepThread(1000);
-      t2.interrupt();
+      t2.cancel(true);
       TestingUtil.killCacheManagers(cm2);
       cacheManagers.remove(1);
       sleepThread(1100);
-      t1.interrupt();
+      t1.cancel(true);
       LockManager lm = TestingUtil.extractComponent(cm1.getCache(), LockManager.class);
       Object owner = lm.getOwner(key);
       assert ownerIsLocalOrUnlocked(owner, cm1.getAddress()) : "Bad lock owner " + owner;
+
+      t1.get(10, TimeUnit.SECONDS);
+      t2.get(10, TimeUnit.SECONDS);
    }
 
    private boolean ownerIsLocalOrUnlocked(Object owner, Address self) {
@@ -66,7 +69,7 @@ public class RemoteLockCleanupStressTest extends MultipleCacheManagersTest {
       }
    }
 
-   class CounterTask implements Runnable {
+   class CounterTask implements ExceptionRunnable {
       EmbeddedCacheManager cm;
 
       CounterTask(EmbeddedCacheManager cm) {

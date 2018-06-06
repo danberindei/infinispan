@@ -18,7 +18,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
@@ -262,14 +261,7 @@ public abstract class BaseAffinityTest extends MultipleCacheManagersTest {
       protected AtomicInteger globalCounter;
 
       TaskNode(int nThreads, AtomicInteger globalCounter) {
-         executorService = Executors.newFixedThreadPool(nThreads, new ThreadFactory() {
-            @Override
-            public Thread newThread(Runnable r) {
-               Thread thread = new Thread(r);
-               thread.setName("TaskNode");
-               return thread;
-            }
-         });
+         executorService = Executors.newFixedThreadPool(nThreads, getTestThreadFactory("TaskNode"));
          this.nThreads = nThreads;
          this.globalCounter = globalCounter;
       }

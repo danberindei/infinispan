@@ -6,23 +6,15 @@ import static org.testng.AssertJUnit.assertEquals;
 
 import java.lang.reflect.Method;
 import java.net.SocketTimeoutException;
-import java.util.concurrent.TimeUnit;
 
 import org.infinispan.client.hotrod.exceptions.HotRodClientException;
 import org.infinispan.client.hotrod.test.HotRodClientTestingUtil;
 import org.infinispan.client.hotrod.test.SingleHotRodServerTest;
-import org.infinispan.commands.write.PutKeyValueCommand;
-import org.infinispan.commons.marshall.Marshaller;
-import org.infinispan.commons.marshall.WrappedByteArray;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
-import org.infinispan.context.InvocationContext;
-import org.infinispan.interceptors.BaseCustomAsyncInterceptor;
 import org.infinispan.interceptors.impl.EntryWrappingInterceptor;
 import org.infinispan.manager.EmbeddedCacheManager;
-import org.infinispan.marshall.core.JBossMarshaller;
 import org.infinispan.server.hotrod.HotRodServer;
 import org.infinispan.server.hotrod.configuration.HotRodServerConfigurationBuilder;
-import org.infinispan.test.TestingUtil;
 import org.infinispan.test.fwk.TestCacheManagerFactory;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -41,7 +33,7 @@ public class SocketTimeoutErrorTest extends SingleHotRodServerTest {
    protected EmbeddedCacheManager createCacheManager() throws Exception {
       ConfigurationBuilder builder = new ConfigurationBuilder();
       builder.customInterceptors().addInterceptor().interceptor(
-            new TimeoutInducingInterceptor()).after(EntryWrappingInterceptor.class);
+            new TimeoutInducingInterceptor(this)).after(EntryWrappingInterceptor.class);
       return TestCacheManagerFactory.createCacheManager(hotRodCacheConfiguration(builder));
    }
 
@@ -78,23 +70,6 @@ public class SocketTimeoutErrorTest extends SingleHotRodServerTest {
 
       cache.put("dos", 2);
       assertEquals(2, cache.get("dos").intValue());
-   }
-
-   public static class TimeoutInducingInterceptor extends BaseCustomAsyncInterceptor {
-
-      @Override
-      public Object visitPutKeyValueCommand(InvocationContext ctx, PutKeyValueCommand command) throws Throwable {
-         if (unmarshall(command.getKey()).equals("FailFailFail")) {
-            return asyncValue(TestingUtil.delayed(null, 6000, TimeUnit.MILLISECONDS));
-         }
-
-         return super.visitPutKeyValueCommand(ctx, command);
-      }
-
-      private String unmarshall(Object key) throws Exception {
-         Marshaller marshaller = new JBossMarshaller();
-         return (String) marshaller.objectFromByteBuffer(((WrappedByteArray) key).getBytes());
-      }
    }
 
 }

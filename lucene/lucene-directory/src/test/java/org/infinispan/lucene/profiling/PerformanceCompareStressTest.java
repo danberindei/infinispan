@@ -13,7 +13,6 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
@@ -165,16 +164,7 @@ public class PerformanceCompareStressTest extends AbstractInfinispanTest {
    }
 
    private ThreadFactory createThreadFactory() {
-      return new ThreadFactory() {
-         private AtomicInteger atomicInteger = new AtomicInteger(0);
-
-         @Override
-         public Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable);
-            thread.setName("File-deleter-" + atomicInteger.incrementAndGet());
-            return thread;
-         }
-      };
+      return getTestThreadFactory("File-deleter");
    }
 
    private Executor createDeleteExecutor() {

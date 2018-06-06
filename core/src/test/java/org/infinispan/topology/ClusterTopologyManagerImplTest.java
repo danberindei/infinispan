@@ -2,12 +2,10 @@ package org.infinispan.topology;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.mockito.Mockito.mock;
 import static org.testng.AssertJUnit.assertEquals;
 import static org.testng.AssertJUnit.assertNull;
 import static org.testng.AssertJUnit.assertTrue;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
@@ -22,9 +20,8 @@ import org.infinispan.distribution.TestAddress;
 import org.infinispan.distribution.ch.ConsistentHash;
 import org.infinispan.distribution.ch.ConsistentHashFactory;
 import org.infinispan.distribution.ch.impl.ReplicatedConsistentHashFactory;
-import org.infinispan.factories.GlobalComponentRegistry;
 import org.infinispan.factories.KnownComponentNames;
-import org.infinispan.manager.EmbeddedCacheManager;
+import org.infinispan.factories.MockGlobalComponentRegistry;
 import org.infinispan.notifications.cachemanagerlistener.CacheManagerNotifier;
 import org.infinispan.notifications.cachemanagerlistener.CacheManagerNotifierImpl;
 import org.infinispan.partitionhandling.AvailabilityMode;
@@ -33,6 +30,8 @@ import org.infinispan.remoting.transport.Address;
 import org.infinispan.remoting.transport.MockTransport;
 import org.infinispan.remoting.transport.Transport;
 import org.infinispan.test.AbstractInfinispanTest;
+import org.infinispan.util.logging.events.EventLogManager;
+import org.infinispan.util.logging.events.impl.EventLogManagerImpl;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.Test;
 
@@ -40,7 +39,8 @@ import org.testng.annotations.Test;
 public class ClusterTopologyManagerImplTest extends AbstractInfinispanTest {
    private static final String CACHE_NAME = "testCache";
 
-   private ExecutorService transportExecutor = Executors.newFixedThreadPool(2, getTestThreadFactory("Transport"));
+   private ExecutorService transportExecutor = Executors.newFixedThreadPool(2, getTestThreadFactory("transport"));
+   private ExecutorService stateTransferExecutor = Executors.newFixedThreadPool(2, getTestThreadFactory("state-transfer"));
 
    private static final Address A = new TestAddress(0, "A");
    private static final Address B = new TestAddress(1, "B");
@@ -58,10 +58,9 @@ public class ClusterTopologyManagerImplTest extends AbstractInfinispanTest {
     * Start two nodes and make both join the cache.
     */
    public void testClusterStartupWith2Nodes() throws Exception {
-      // Create global component registry with dependencies
+      // Create mock component registry with dependencies
       GlobalConfiguration gc = GlobalConfigurationBuilder.defaultClusteredBuilder().build();
-      EmbeddedCacheManager cacheManager = mock(EmbeddedCacheManager.class);
-      GlobalComponentRegistry gcr = new GlobalComponentRegistry(gc, cacheManager, Collections.emptySet());
+      MockGlobalComponentRegistry gcr = new MockGlobalComponentRegistry(gc);
 
       CacheManagerNotifierImpl managerNotifier = new CacheManagerNotifierImpl();
       gcr.registerComponent(managerNotifier, CacheManagerNotifier.class);
@@ -77,6 +76,8 @@ public class ClusterTopologyManagerImplTest extends AbstractInfinispanTest {
 
       MockLocalTopologyManager ltm = new MockLocalTopologyManager(CACHE_NAME);
       gcr.registerComponent(ltm, LocalTopologyManager.class);
+
+      gcr.registerComponent(new EventLogManagerImpl(), EventLogManager.class);
 
       // Initial conditions
       transport.init(1, singletonList(A));
@@ -132,10 +133,9 @@ public class ClusterTopologyManagerImplTest extends AbstractInfinispanTest {
     * Assume there are already 2 nodes and the coordinator leaves during rebalance
     */
    public void testCoordinatorLostDuringRebalance() throws Exception {
-      // Create global component registry with dependencies
+      // Create mock component registry with dependencies
       GlobalConfiguration gc = GlobalConfigurationBuilder.defaultClusteredBuilder().build();
-      EmbeddedCacheManager cacheManager = mock(EmbeddedCacheManager.class);
-      GlobalComponentRegistry gcr = new GlobalComponentRegistry(gc, cacheManager, Collections.emptySet());
+      MockGlobalComponentRegistry gcr = new MockGlobalComponentRegistry(gc);
 
       CacheManagerNotifierImpl managerNotifier = new CacheManagerNotifierImpl();
       gcr.registerComponent(managerNotifier, CacheManagerNotifier.class);
@@ -148,9 +148,12 @@ public class ClusterTopologyManagerImplTest extends AbstractInfinispanTest {
       gcr.registerComponent(persistentUUIDManager, PersistentUUIDManager.class);
 
       gcr.registerComponent(transportExecutor, KnownComponentNames.ASYNC_TRANSPORT_EXECUTOR);
+      gcr.registerComponent(stateTransferExecutor, KnownComponentNames.STATE_TRANSFER_EXECUTOR);
 
       MockLocalTopologyManager ltm = new MockLocalTopologyManager(CACHE_NAME);
       gcr.registerComponent(ltm, LocalTopologyManager.class);
+
+      gcr.registerComponent(new EventLogManagerImpl(), EventLogManager.class);
 
       // Initial conditions (rebalance in phase 3, READ_NEW_WRITE_ALL)
       transport.init(2, asList(A, B));
@@ -232,6 +235,7 @@ public class ClusterTopologyManagerImplTest extends AbstractInfinispanTest {
       verifyRebalance(transport, ltm, ctm, 7, 4, singletonList(B), asList(B, A));
 
       transport.verifyNoErrors();
+      gcr.stop();
    }
 
    private void verifyRebalance(MockTransport transport, MockLocalTopologyManager ltm, ClusterTopologyManagerImpl ctm,
@@ -304,5 +308,7 @@ public class ClusterTopologyManagerImplTest extends AbstractInfinispanTest {
    public void shutdownExecutor() throws InterruptedException {
       transportExecutor.shutdownNow();
       assertTrue(transportExecutor.awaitTermination(10, TimeUnit.SECONDS));
+      stateTransferExecutor.shutdownNow();
+      assertTrue(stateTransferExecutor.awaitTermination(10, TimeUnit.SECONDS));
    }
 }

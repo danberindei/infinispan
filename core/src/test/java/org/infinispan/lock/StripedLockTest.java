@@ -1,7 +1,7 @@
 package org.infinispan.lock;
 
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.infinispan.test.AbstractInfinispanTest;
 import org.infinispan.util.concurrent.locks.StripedLock;
@@ -18,10 +18,6 @@ public class StripedLockTest extends AbstractInfinispanTest {
 
    StripedLock stripedLock;
 
-   public static final int CAN_ACQUIRE_WL = 1;
-   public static final int CAN_ACQUIRE_RL = 2;
-   public static final int ACQUIRE_WL = 3;
-   public static final int ACQUIRE_RL = 4;
    /* this value will make sure that the index of the underlying shared lock is not 0*/
    private static final String KEY = "21321321321321321";
 
@@ -82,73 +78,34 @@ public class StripedLockTest extends AbstractInfinispanTest {
       stripedLock.releaseGlobalLock(true);
       assert stripedLock.getTotalReadLockCount() == 0;
       assert stripedLock.getTotalWriteLockCount() == 0;
-
-
    }
 
    private boolean aquireWL() throws Exception {
-      OtherThread otherThread = new OtherThread();
-      otherThread.start();
-      otherThread.operationQueue.put(ACQUIRE_WL);
-      return otherThread.responseQueue.take();
+      Future<Boolean> fork = fork(() -> stripedLock.acquireLock(KEY, true, 0));
+      return fork.get(10, TimeUnit.SECONDS);
    }
 
    private boolean aquireRL() throws Exception {
-      OtherThread otherThread = new OtherThread();
-      otherThread.start();
-      otherThread.operationQueue.put(ACQUIRE_RL);
-      return otherThread.responseQueue.take();
+      Future<Boolean> fork = fork(() -> stripedLock.acquireLock(KEY, false, 0));
+      return fork.get(10, TimeUnit.SECONDS);
    }
 
    private boolean canAquireRL() throws Exception {
-      OtherThread otherThread = new OtherThread();
-      otherThread.start();
-      otherThread.operationQueue.put(CAN_ACQUIRE_RL);
-      return otherThread.responseQueue.take();
+      Future<Boolean> fork = fork(() -> {
+         Boolean response = stripedLock.acquireLock(KEY, false, 0);
+         if (response) stripedLock.releaseLock(KEY);
+         return response;
+      });
+      return fork.get(10, TimeUnit.SECONDS);
    }
 
    private boolean canAquireWL() throws Exception {
-      OtherThread otherThread = new OtherThread();
-      otherThread.start();
-      otherThread.operationQueue.put(CAN_ACQUIRE_WL);
-      return otherThread.responseQueue.take();
+      Future<Boolean> fork = fork(() -> {
+         Boolean response = stripedLock.acquireLock(KEY, true, 0);
+         if (response) stripedLock.releaseLock(KEY);
+         return response;
+      });
+      return fork.get(10, TimeUnit.SECONDS);
    }
 
-   public class OtherThread extends Thread {
-      volatile BlockingQueue<Integer> operationQueue = new ArrayBlockingQueue<Integer>(1);
-      volatile BlockingQueue<Boolean> responseQueue = new ArrayBlockingQueue<Boolean>(1);
-
-      public void run() {
-         try {
-            int operation = operationQueue.take();
-            Boolean response;
-            switch (operation) {
-               case CAN_ACQUIRE_RL: {
-                  response = stripedLock.acquireLock(KEY, false, 0);
-                  if (response) stripedLock.releaseLock(KEY);
-                  break;
-               }
-               case CAN_ACQUIRE_WL: {
-                  response = stripedLock.acquireLock(KEY, true, 0);
-                  if (response) stripedLock.releaseLock(KEY);
-                  break;
-               }
-               case ACQUIRE_RL: {
-                  response = stripedLock.acquireLock(KEY, false, 0);
-                  break;
-               }
-               case ACQUIRE_WL: {
-                  response = stripedLock.acquireLock(KEY, true, 0);
-                  break;
-               }
-               default: {
-                  throw new IllegalStateException("Unknown operation: " + operation);
-               }
-            }
-            responseQueue.put(response);
-         } catch (Throwable e) {
-            log.error("Error performing lock operation", e);
-         }
-      }
-   }
 }

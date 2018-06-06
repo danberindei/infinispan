@@ -19,6 +19,7 @@ import javax.transaction.xa.Xid;
 import org.infinispan.Cache;
 import org.infinispan.distribution.BaseDistFunctionalTest;
 import org.infinispan.distribution.MagicKey;
+import org.infinispan.test.ExceptionRunnable;
 import org.infinispan.test.TestingUtil;
 import org.infinispan.test.fwk.TestResourceTracker;
 import org.testng.annotations.Test;
@@ -166,10 +167,11 @@ public abstract class RehashTestBase extends BaseDistFunctionalTest<Object, Stri
       final List<MagicKey> keys = init();
       final CountDownLatch latch = new CountDownLatch(1);
       List<Updater> updaters = new ArrayList<>(keys.size());
+      List<Future<Void>> futures = new ArrayList<>(keys.size());
       for (MagicKey k : keys) {
          Updater u = new Updater(c1, k, latch, tx);
-         u.start();
          updaters.add(u);
+         futures.add(fork(u));
       }
 
       latch.countDown();
@@ -178,7 +180,7 @@ public abstract class RehashTestBase extends BaseDistFunctionalTest<Object, Stri
       performRehashEvent(false);
 
       for (Updater u : updaters) u.complete();
-      for (Updater u : updaters) u.join();
+      for (Future<Void> f : futures) f.get(10, TimeUnit.SECONDS);
 
       waitForRehashCompletion();
 
@@ -189,7 +191,7 @@ public abstract class RehashTestBase extends BaseDistFunctionalTest<Object, Stri
    }
 }
 
-class Updater extends Thread {
+class Updater implements ExceptionRunnable {
    static final Random r = new Random();
    volatile int currentValue = 0;
    MagicKey key;
@@ -199,7 +201,6 @@ class Updater extends Thread {
    TransactionManager tm;
 
    Updater(Cache cache, MagicKey key, CountDownLatch latch, boolean tx) {
-      super("Updater-" + key);
       this.key = key;
       this.cache = cache;
       this.latch = latch;

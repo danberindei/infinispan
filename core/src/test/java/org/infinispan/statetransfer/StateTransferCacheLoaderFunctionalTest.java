@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.infinispan.Cache;
 import org.infinispan.configuration.cache.CacheMode;
@@ -139,18 +141,12 @@ public class StateTransferCacheLoaderFunctionalTest extends StateTransferFunctio
          TestingUtil.blockUntilViewsReceived(60000, cm2.getCache("initialCache"), cm3.getCache("initialCache"));
 
          // now fork start of "slow" cache
-         Thread worker = new Thread(){
-            @Override
-            public void run() {
-               cm2.startCaches(cacheName);
-            }
-         };
-         worker.start();
+         Future<Void> worker = fork(() -> {cm2.startCaches(cacheName);});
          // lets wait a bit, cache is started pon cm2, but preload is not finished
          TestingUtil.sleepThread(1000);
 
          // uncomment this to see failing test
-         worker.join();
+         worker.get(10, TimeUnit.SECONDS);
 
          // at this point node is not alone, so preload is not used
          // the start of the cache must be blocked until state transfer is finished

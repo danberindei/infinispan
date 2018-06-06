@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified"
-           version="1.0" targetNamespace="urn:infinispan:config:9.3"
-           xmlns:tns="urn:infinispan:config:9.3" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+           version="1.0" targetNamespace="urn:infinispan:config:${infinispan.core.schema.version}"
+           xmlns:tns="urn:infinispan:config:${infinispan.core.schema.version}" xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
   <xs:element name="infinispan" type="tns:infinispan">
     <xs:annotation>
@@ -88,8 +88,11 @@
                  %t - emit the per-factory thread sequence number
                  %g - emit the global thread sequence number
                  %f - emit the factory sequence number
+                 %p - emit the ":"-separated thread group path
                  %i - emit the thread ID
                  %G - emit the thread group name
+                 %n - emit the node name
+                 %c - emit the component name
                     ]]>
             </xs:documentation>
           </xs:annotation>

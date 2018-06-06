@@ -16,9 +16,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -79,6 +83,7 @@ public class AbstractInfinispanTest {
                                                                                  60L, TimeUnit.SECONDS,
                                                                                     new SynchronousQueue<>(),
                                                                                  defaultThreadFactory);
+   private final ScheduledExecutorService timeoutExecutor = new ScheduledThreadPoolExecutor(1, defaultThreadFactory);
 
    public static final TimeService TIME_SERVICE = new DefaultTimeService();
 
@@ -386,6 +391,20 @@ public class AbstractInfinispanTest {
 
    protected void eventually(String message, Condition ec) {
       eventually(message, ec, 10000, 500, TimeUnit.MILLISECONDS);
+   }
+
+   // Temporarily replaces Java 9's CompletableFuture.orTimeout
+   public <T> CompletableFuture<T> orTimeout(CompletableFuture<T> f, long timeout, TimeUnit timeUnit) {
+      ScheduledFuture<Boolean>
+         scheduled = timeoutExecutor.schedule(() -> f.completeExceptionally(new org.infinispan.util.concurrent.TimeoutException("Timed out!")), timeout, timeUnit);
+      f.whenComplete((v, t) -> scheduled.cancel(false));
+      return f;
+   }
+
+   public <T> CompletableFuture<T> delayed(T value, long timeout, TimeUnit timeUnit) {
+      CompletableFuture<T> future = new CompletableFuture<>();
+      timeoutExecutor.schedule(() -> future.complete(value), timeout, timeUnit);
+      return future;
    }
 
    public void safeRollback(TransactionManager transactionManager) {
