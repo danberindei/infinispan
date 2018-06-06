@@ -6,7 +6,7 @@ pipeline {
     }
 
     options {
-        timeout(time: 3, unit: 'HOURS')
+        timeout(time: 5, unit: 'HOURS')
     }
 
     stages {
@@ -49,7 +49,7 @@ pipeline {
         stage('Tests') {
             steps {
                 configFileProvider([configFile(fileId: 'maven-settings-with-deploy-snapshot', variable: 'MAVEN_SETTINGS')]) {
-                    sh "$MAVEN_HOME/bin/mvn verify -B -V -e -s $MAVEN_SETTINGS -Dmaven.test.failure.ignore=true -Dansi.strip=true -Djava10.home=$JAVA10_HOME"
+                    sh "$MAVEN_HOME/bin/mvn verify -B -V -e -s $MAVEN_SETTINGS -Dmaven.test.failure.ignore=true -Dansi.strip=true -Djava10.home=$JAVA10_HOME -PtraceTests"
                 }
                 // TODO Add StabilityTestDataPublisher after https://issues.jenkins-ci.org/browse/JENKINS-42610 is fixed
                 // Capture target/surefire-reports/*.xml, target/failsafe-reports/*.xml,
@@ -75,9 +75,11 @@ pipeline {
 
     post {
         always {
+            // Move logs of failed tests to the root directory (no string interpolation)
+            sh 'bin/process_trace_logs.sh . ${BRANCH_NAME}-${BUILD_NUMBER}_'
             // Archive logs and dump files
             sh 'find . \\( -name "*.log" -o -name "*.dump*" -o -name "hs_err_*" \\) -exec xz {} \\;'
-            archiveArtifacts allowEmptyArchive: true, artifacts: '**/*.xz,documentation/target/generated-html/**'
+            archiveArtifacts allowEmptyArchive: true, artifacts: '*.log.gz,**/*.xz,documentation/target/generated-html/**'
 
             // Clean
             sh 'git clean -fdx -e "*.hprof" || echo "git clean failed, exit code $?"'
