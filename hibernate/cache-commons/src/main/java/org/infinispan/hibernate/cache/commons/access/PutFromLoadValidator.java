@@ -202,10 +202,10 @@ public class PutFromLoadValidator {
 			// Note that invalidation does *NOT* acquire locks; therefore, we have to start invalidating before
 			// wrapping the entry, since if putFromLoad was invoked between wrap and beginInvalidatingKey, the invalidation
 			// would not commit the entry removal (as during wrap the entry was not in cache)
-         TxPutFromLoadInterceptor txPutFromLoadInterceptor = new TxPutFromLoadInterceptor(validator, ByteString.fromString(cache.getName()));
-         componentRegistry.replaceComponent(TxPutFromLoadInterceptor.class.getName(), txPutFromLoadInterceptor, true);
-         componentRegistry.getComponent(TxPutFromLoadInterceptor.class).running();
-         chain.addInterceptor(txPutFromLoadInterceptor, entryWrappingPosition);
+//         TxPutFromLoadInterceptor txPutFromLoadInterceptor = new TxPutFromLoadInterceptor(validator, ByteString.fromString(cache.getName()));
+//         componentRegistry.replaceComponent(TxPutFromLoadInterceptor.class.getName(), txPutFromLoadInterceptor, true);
+//         componentRegistry.getComponent(TxPutFromLoadInterceptor.class).running();
+//         chain.addInterceptor(txPutFromLoadInterceptor, entryWrappingPosition);
 		}
 		else {
 			NonTxPutFromLoadInterceptor nonTxPutFromLoadInterceptor = new NonTxPutFromLoadInterceptor(validator, ByteString.fromString(cache.getName()));

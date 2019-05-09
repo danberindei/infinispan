@@ -100,7 +100,7 @@ class TxPutFromLoadInterceptor extends BaseRpcInterceptor {
 				}
 			}
 		}
-		else {
+		else if (command.isOnePhaseCommit()) {
 			for (WriteCommand wc : command.getModifications()) {
             Collection<?> keys = wc.getAffectedKeys();
 				if (log.isTraceEnabled()) {

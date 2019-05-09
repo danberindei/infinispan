@@ -172,7 +172,7 @@ public class NaturalIdInvalidationTest extends DualNodeTest {
       CountDownLatch latch;
       if (cacheMode.isInvalidation()) {
          latch = useTransactionalCache()
-            ? expectAfterEndInvalidation(remoteNaturalIdCache.getAdvancedCache(), 1)
+            ? expectAfterEndInvalidation(remoteNaturalIdCache.getAdvancedCache(), 0)
             : expectAfterEndInvalidation(remoteNaturalIdCache.getAdvancedCache(), 2);
       } else {
          latch = expectAfterUpdate(remoteNaturalIdCache.getAdvancedCache(), 2);
