@@ -20,11 +20,16 @@ import org.infinispan.configuration.cache.CacheMode;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.context.impl.FlagBitSets;
 import org.infinispan.distribution.BlockingInterceptor;
+import org.infinispan.factories.KnownComponentNames;
+import org.infinispan.statetransfer.DelegatingStateTransferLock;
 import org.infinispan.statetransfer.StateTransferInterceptor;
+import org.infinispan.statetransfer.StateTransferLock;
 import org.infinispan.test.MultipleCacheManagersTest;
+import org.infinispan.test.TestingUtil;
 import org.infinispan.test.fwk.CleanupAfterMethod;
 import org.infinispan.util.ControlledConsistentHashFactory;
 import org.infinispan.util.ControlledRpcManager;
+import org.infinispan.util.concurrent.BlockingTaskAwareExecutorService;
 import org.testng.annotations.Test;
 
 @Test(groups = "functional", testName = "scattered.statetransfer.PrefetchTest")
@@ -79,6 +84,20 @@ public class PrefetchTest extends MultipleCacheManagersTest {
             .addInterceptorBefore(beforeInterceptor, StateTransferInterceptor.class);
       cache(2).getAdvancedCache().getAsyncInterceptorChain()
             .addInterceptorBefore(afterInterceptor, StateTransferInterceptor.class);
+
+      TestingUtil.wrapComponent(cache(2), StateTransferLock.class, stl -> {
+         return new DelegatingStateTransferLock(stl) {
+            @Override
+            public void notifyTransactionDataReceived(int topologyId) {
+               super.transactionDataReceived(topologyId);
+               TestingUtil.extractGlobalComponent(manager(2), BlockingTaskAwareExecutorService.class,
+                                                  KnownComponentNames.REMOTE_COMMAND_EXECUTOR)
+                          .checkForReadyTasks();
+               log.debug("Delaying notifyEndOfStateTransferIfNeeded");
+               TestingUtil.sleepThread(500);
+            }
+         };
+      });
 
       // cache(2) will become owner after we stop cache(1)
       chf.setOwnerIndexes(1);
