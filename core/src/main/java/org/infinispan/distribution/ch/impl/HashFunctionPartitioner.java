@@ -20,7 +20,8 @@ public class HashFunctionPartitioner implements KeyPartitioner, Cloneable {
    private Hash hashFunction;
    private int numSegments;
    private int segmentSize;
-
+   private int magicMultiplier;
+   private int magicShift;
 
    public HashFunctionPartitioner() {}
 
@@ -42,12 +43,15 @@ public class HashFunctionPartitioner implements KeyPartitioner, Cloneable {
       this.hashFunction = MurmurHash3.getInstance();
       this.numSegments = numSegments;
       this.segmentSize = Util.getSegmentSize(numSegments);
+      int[] magic = MagicDivision.computeMagicNumber(segmentSize);
+      this.magicMultiplier = magic[0];
+      this.magicShift = magic[1];
    }
 
    @Override
    public int getSegment(Object key) {
       // The result must always be positive, so we make sure the dividend is positive first
-      return (hashFunction.hash(key) & Integer.MAX_VALUE) / segmentSize;
+      return MagicDivision.div (hashFunction.hash(key) & Integer.MAX_VALUE, magicMultiplier, magicShift);
    }
 
    public Hash getHash() {

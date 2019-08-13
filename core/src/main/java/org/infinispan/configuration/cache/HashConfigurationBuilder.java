@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import org.infinispan.commons.CacheConfigurationException;
 import org.infinispan.commons.configuration.Builder;
 import org.infinispan.commons.configuration.ConfigurationBuilderInfo;
 import org.infinispan.commons.configuration.attributes.AttributeSet;
@@ -119,6 +120,10 @@ public class HashConfigurationBuilder extends AbstractClusteringConfigurationChi
 
    @Override
    public void validate() {
+      int numSegments = attributes.attribute(NUM_SEGMENTS).get();
+      if (numSegments < 1 || numSegments > 65536) {
+         throw new CacheConfigurationException("The number of segments must be an integer between 1 and 65536");
+      }
       groupsConfigurationBuilder.validate();
    }
 

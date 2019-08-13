@@ -1196,7 +1196,7 @@ public class StateConsumerImpl implements StateConsumer {
       boolean found = false;
       synchronized (transferMapsLock) {
          if (trace) log.tracef("Removing inbound transfers from node %s for segments %s",
-               inboundTransfer.getSegments(), inboundTransfer.getSource(), cacheName);
+               inboundTransfer.getSource(), inboundTransfer.getSegments());
          List<InboundTransferTask> transfers = transfersBySource.get(inboundTransfer.getSource());
          if (transfers != null && (found = transfers.remove(inboundTransfer)) && transfers.isEmpty()) {
             transfersBySource.remove(inboundTransfer.getSource());
