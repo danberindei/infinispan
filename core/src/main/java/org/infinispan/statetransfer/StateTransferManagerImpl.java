@@ -1,6 +1,7 @@
 package org.infinispan.statetransfer;
 
 import static org.infinispan.util.concurrent.CompletionStages.ignoreValue;
+import static org.infinispan.util.logging.Log.CLUSTER;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -214,6 +215,10 @@ public class StateTransferManagerImpl implements StateTransferManager {
             case READ_NEW_WRITE_ALL:
                localTopologyManager.confirmRebalancePhase(cacheName, newTopologyId, newRebalanceId, null);
          }
+      })
+      .exceptionally(throwable -> {
+         CLUSTER.stateTransferError(cacheName, throwable);
+         return null;
       });
       // Block topology updates until the consumer finishes applying the topology update
       return ignoreValue(consumerUpdateFuture);

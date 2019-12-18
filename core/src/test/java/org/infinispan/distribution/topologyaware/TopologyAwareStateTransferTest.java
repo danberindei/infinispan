@@ -38,7 +38,7 @@ public class TopologyAwareStateTransferTest extends MultipleCacheManagersTest {
 
       ConsistentHash hash = cache(0).getAdvancedCache().getDistributionManager().getWriteConsistentHash();
       List<Address> members = hash.getMembers();
-      addresses = members.toArray(new Address[members.size()]);
+      addresses = members.toArray(new Address[0]);
    }
 
    @AfterMethod
@@ -145,8 +145,10 @@ public class TopologyAwareStateTransferTest extends MultipleCacheManagersTest {
       eventuallyEquals(2, () -> caches().stream().mapToInt(c -> c.getAdvancedCache().getDataContainer().containsKey(key) ? 1 : 0).sum());
       for (Cache<? super K, ?> c : caches()) {
          if (cacheMode.isScattered()) {
-            eventuallyEquals("Failure for key " + key + " on cache " + address(c), true,
-                  () -> addresses.contains(address(c)) ? c.getAdvancedCache().getDataContainer().containsKey(key) : true);
+            if (addresses.contains(address(c))) {
+               eventuallyEquals("Failure for key " + key + " on cache " + address(c), true,
+                                () -> c.getAdvancedCache().getDataContainer().containsKey(key));
+            }
          } else {
             eventuallyEquals("Failure for key " + key + " on cache " + address(c), addresses.contains(address(c)),
                   () -> c.getAdvancedCache().getDataContainer().containsKey(key));

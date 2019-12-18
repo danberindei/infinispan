@@ -331,8 +331,7 @@ public abstract class BaseTxStateTransferOverwriteTest extends BaseDistFunctiona
       ControlledRpcManager blockingRpcManager2 = ControlledRpcManager.replaceRpcManager(nonOwnerCache);
       // The execution of the write/prepare/commit commands is controlled with the BlockingInterceptor
       blockingRpcManager0.excludeCommands(BackupWriteCommand.class, PrepareCommand.class, CommitCommand.class,
-                                          TxCompletionNotificationCommand.class
-      );
+                                          TxCompletionNotificationCommand.class);
       blockingRpcManager2.excludeCommands(BackupAckCommand.class);
 
       // Block the rebalance confirmation on cache0

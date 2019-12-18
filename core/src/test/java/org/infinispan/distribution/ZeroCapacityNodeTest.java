@@ -46,6 +46,23 @@ public class ZeroCapacityNodeTest extends MultipleCacheManagersTest {
       assertCapacityFactors(zeroCapacityNode, 0.0f);
    }
 
+   public void testZeroCapacityFactorSingleNode() {
+
+      ConfigurationBuilder cb = new ConfigurationBuilder();
+      cb.clustering().cacheMode(CacheMode.DIST_SYNC);
+      cb.clustering().hash().numSegments(NUM_SEGMENTS);
+      cb.clustering().hash().capacityFactor(0f);
+
+      EmbeddedCacheManager zeroCapacityNode = addClusterEnabledCacheManager(GlobalConfigurationBuilder.defaultClusteredBuilder().zeroCapacityNode(true), cb);
+
+      waitForClusterToForm();
+
+      EmbeddedCacheManager node1 = addClusterEnabledCacheManager(GlobalConfigurationBuilder.defaultClusteredBuilder(), cb);
+
+      assertCapacityFactors(node1, 0.5f);
+      assertCapacityFactors(zeroCapacityNode, 0.0f);
+   }
+
    private void assertCapacityFactors(EmbeddedCacheManager cm, float expectedCapacityFactors) {
       ConsistentHash ch = cache(0).getAdvancedCache().getDistributionManager().getReadConsistentHash();
       Map<Address, Float> capacityFactors = ch.getCapacityFactors();

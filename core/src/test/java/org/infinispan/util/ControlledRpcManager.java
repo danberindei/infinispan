@@ -226,7 +226,9 @@ public class ControlledRpcManager extends AbstractDelegatingRpcManager {
          controlledRequest.resultFuture.whenComplete((ignored, throwable) -> cancelTask.cancel(false));
       }
       // resultFuture is completed from a test thread, and we don't want to run the interceptor callbacks there
-      return controlledRequest.resultFuture.whenCompleteAsync((r, t) -> {}, executor);
+      return controlledRequest.resultFuture.whenCompleteAsync((r, t) -> {
+         log.tracef("Completed request %s", controlledRequest.getCommand());
+      }, executor);
    }
 
    private void addGlobalError(RuntimeException t) {

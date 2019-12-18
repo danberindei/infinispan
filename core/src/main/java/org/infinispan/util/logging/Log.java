@@ -789,8 +789,8 @@ public interface Log extends BasicLogger {
    void couldNotInterruptThread(UUID id);
 
    @LogMessage(level = ERROR)
-   @Message(value = "No live owners found for segments %s of cache %s. Excluded owners: %s", id = 208)
-   void noLiveOwnersFoundForSegments(Collection<Integer> segments, String cacheName, Collection<Address> faultySources);
+   @Message(value = "No live owners found for segments %s of cache %s", id = 208)
+   void noLiveOwnersFoundForSegments(Collection<Integer> segments, String cacheName);
 
    @LogMessage(level = WARN)
    @Message(value = "Failed to retrieve transactions of cache %s from node %s, segments %s", id = 209)
@@ -1099,7 +1099,7 @@ public interface Log extends BasicLogger {
 //   @Message(value = "Iterator response for identifier %s encountered unexpected exception", id = 301)
 //   CacheException exceptionProcessingIteratorResponse(UUID identifier, @Cause Throwable cause);
 
-   @LogMessage(level = WARN)
+   @LogMessage(level = ERROR)
    @Message(value = "Issue when retrieving transactions from %s, response was %s", id = 302)
    void unsuccessfulResponseRetrievingTransactionsForSegments(Address address, Response response);
 
@@ -2041,4 +2041,8 @@ public interface Log extends BasicLogger {
 
    @Message(value = "Store %s cannot be configured to be shared as it does not contain the SHARED characteristic", id = 600)
    CacheConfigurationException storeConfiguredSharedButCharacteristicNotPresent(String storeClassName);
+
+   @LogMessage(level = ERROR)
+   @Message(value = "Error during state transfer for cache %s", id = 600)
+   void stateTransferError(String cacheName, @Cause Throwable t);
 }

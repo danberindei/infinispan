@@ -6,10 +6,13 @@ import java.io.ObjectOutput;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.CompletionStage;
+import java.util.stream.Collectors;
 
 import org.infinispan.commands.TopologyAffectedCommand;
 import org.infinispan.commands.remote.BaseRpcCommand;
 import org.infinispan.commons.marshall.MarshallUtil;
+import org.infinispan.commons.util.IntSet;
+import org.infinispan.commons.util.IntSets;
 import org.infinispan.conflict.impl.StateReceiver;
 import org.infinispan.factories.ComponentRegistry;
 import org.infinispan.statetransfer.StateChunk;
@@ -128,13 +131,22 @@ public class StateResponseCommand extends BaseRpcCommand implements TopologyAffe
 
    @Override
    public String toString() {
+      String nonEmptyChunks = stateChunks.stream()
+                                         .filter(c -> c.getCacheEntries().size() != 0)
+                                         .map(c -> String.format("%d: %d entries", c.getSegmentId(),
+                                                                 c.getCacheEntries().size()))
+                                         .collect(Collectors.joining(", ", "{", "}"));
+      IntSet finishedSegments = stateChunks.stream()
+                                      .mapToInt(StateChunk::getSegmentId)
+                                      .collect(IntSets::mutableEmptySet, IntSet::add, IntSet::addAll);
       return "StateResponseCommand{" +
-            "cache=" + cacheName +
-            ", pushTransfer=" + pushTransfer +
-            ", stateChunks=" + stateChunks +
-            ", origin=" + origin +
-            ", topologyId=" + topologyId +
-            ", applyState=" + applyState +
-            '}';
+             "cache=" + cacheName +
+             ", origin=" + origin +
+             ", pushTransfer=" + pushTransfer +
+             ", applyState=" + applyState +
+             ", topologyId=" + topologyId +
+             ", segments=" + nonEmptyChunks +
+             ", finishedSegments=" + finishedSegments +
+             '}';
    }
 }

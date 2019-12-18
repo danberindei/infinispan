@@ -220,7 +220,7 @@ public class RangeSet implements IntSet {
 
    @Override
    public String toString() {
-      return "RangeSet(" + size + ")";
+      return "{0-" + (size - 1) + "}";
    }
 
    private static class RangeSetSpliterator implements Spliterator.OfInt {
