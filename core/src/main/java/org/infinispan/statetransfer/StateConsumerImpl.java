@@ -24,9 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -65,7 +63,6 @@ import org.infinispan.distribution.DistributionManager;
 import org.infinispan.distribution.TriangleOrderManager;
 import org.infinispan.distribution.ch.ConsistentHash;
 import org.infinispan.distribution.ch.KeyPartitioner;
-import org.infinispan.executors.LimitedExecutor;
 import org.infinispan.factories.annotations.ComponentName;
 import org.infinispan.factories.annotations.Inject;
 import org.infinispan.factories.annotations.Start;
@@ -159,9 +156,6 @@ public class StateConsumerImpl implements StateConsumer {
    protected volatile KeyInvalidationListener keyInvalidationListener; //for test purpose only!
 
    protected volatile CacheTopology cacheTopology;
-   // The first topology in which the local node was a member. Any command with a lower
-   // topology id will be ignored.
-   private final int firstTopologyAsMember = Integer.MAX_VALUE;
 
    /**
     * Indicates if there is a state transfer in progress. It is set to the new topology id when onTopologyUpdate with
@@ -542,7 +536,7 @@ public class StateConsumerImpl implements StateConsumer {
       }
 
       CompletionStage<Void> stage = CompletableFutures.completedNull();
-      if (isTransactional && !isTotalOrder) {
+      if (isTransactional) {
          stage = stage.thenCompose(ignored -> requestTransactions(addedSegments));
       }
 
