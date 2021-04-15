@@ -138,12 +138,11 @@ public class JGroupsTransport implements Transport {
    public static final String CHANNEL_LOOKUP = "channelLookup";
    public static final String CHANNEL_CONFIGURATOR = "channelConfigurator";
    public static final short REQUEST_FLAGS_UNORDERED =
-         (short) (Message.Flag.OOB.value() | Message.Flag.NO_TOTAL_ORDER.value() |
-                  Message.Flag.DONT_BUNDLE.value());
+         (short) (Message.Flag.OOB.value() | Message.Flag.NO_TOTAL_ORDER.value());
    public static final short REQUEST_FLAGS_PER_SENDER = Message.Flag.NO_TOTAL_ORDER.value();
    public static final short REPLY_FLAGS =
          (short) (Message.Flag.NO_FC.value() | Message.Flag.OOB.value() |
-                  Message.Flag.NO_TOTAL_ORDER.value() | Message.Flag.DONT_BUNDLE.value());
+                  Message.Flag.NO_TOTAL_ORDER.value());
    protected static final String DEFAULT_JGROUPS_CONFIGURATION_FILE = "default-configs/default-jgroups-udp.xml";
    public static final Log log = LogFactory.getLog(JGroupsTransport.class);
    private static final CompletableFuture<Map<Address, Response>> EMPTY_RESPONSES_FUTURE =
@@ -1484,6 +1483,8 @@ public class JGroupsTransport implements Transport {
 
             nonBlockingExecutor.execute(() -> processMessage(message));
          });
+
+         processMessage(firstMessage.get());
       }
    }
 }
