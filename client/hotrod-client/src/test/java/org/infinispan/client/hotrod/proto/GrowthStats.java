@@ -2,6 +2,7 @@ package org.infinispan.client.hotrod.proto;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.infinispan.protostream.annotations.ProtoField;
 
@@ -43,12 +44,12 @@ public class GrowthStats {
     public List<List<String>> getData() { return data; }
 
     @ProtoField(number = 6)
-    ListOfWrappedLists<String> getProtoData() {
-        return new ListOfWrappedLists<>(data);
+    List<ListOfString> getProtoData() {
+        return data.stream().map(ListOfString::new).collect(Collectors.toList());
     }
 
-    void setProtoData(ListOfWrappedLists<String> protoData) {
-       data = protoData.getLists();
+    void setProtoData(List<ListOfString> protoData) {
+       data = protoData.stream().map(ListOfString::getList).collect(Collectors.toList());
     }
 
     @ProtoField(number = 7)
