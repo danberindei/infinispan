@@ -2197,4 +2197,7 @@ public interface Log extends BasicLogger {
 
    @Message(value = "Async cache modes like %s do not allow expiration with SYNC touch mode", id = 645)
    CacheConfigurationException invalidTouchMode(CacheMode cacheMode);
+
+   @Message(value = "SingleFileStore does not support max-entries when segmented", id = 646)
+   CacheConfigurationException segmentedSingleFileStoreDoesNotSupportMaxEntries();
 }
