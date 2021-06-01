@@ -44,12 +44,12 @@ public class GrowthStats {
     public List<List<String>> getData() { return data; }
 
     @ProtoField(number = 6)
-    List<ListOfString> getProtoData() {
-        return data.stream().map(ListOfString::new).collect(Collectors.toList());
+    List<YearData> getProtoData() {
+        return data.stream().map(YearData::new).collect(Collectors.toList());
     }
 
-    void setProtoData(List<ListOfString> protoData) {
-       data = protoData.stream().map(ListOfString::getList).collect(Collectors.toList());
+    void setProtoData(List<YearData> protoData) {
+       data = protoData.stream().map(YearData::getList).collect(Collectors.toList());
     }
 
     @ProtoField(number = 7)

@@ -46,7 +46,7 @@ public class ProtoTest extends MultiHotRodServersTest {
    public void testListOfListOfString() {
       GrowthStats stats = new GrowthStats();
       // Arrays.ArrayList is not supported
-      List<List<String>> lists = new ArrayList<>(Arrays.asList(new ArrayList<>(Arrays.asList("a", "b")), new ArrayList<>(Arrays.asList("1", "2"))));
+      List<List<String>> lists = new ArrayList<>(Arrays.asList(new ArrayList<>(Arrays.asList("a", "b", null)), new ArrayList<>(Arrays.asList(null, "1", "2"))));
       stats.setData(lists);
 
       assertNull(remoteCache().put("key", stats));
