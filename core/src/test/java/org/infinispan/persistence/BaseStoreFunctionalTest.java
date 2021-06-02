@@ -256,7 +256,7 @@ public abstract class BaseStoreFunctionalTest extends SingleCacheManagerTest {
       cache.putAll(entriesMap);
 
       assertEquals(numberOfEntries, cache.size());
-      WaitNonBlockingStore store = TestingUtil.getFirstStore(cache);
+      WaitNonBlockingStore<String, Object> store = TestingUtil.getFirstStoreWait(cache);
       for (int i = 0; i < numberOfEntries; ++i) {
          assertNotNull("Entry for key: " + i + " was null", store.loadEntry(Integer.toString(i)));
       }
