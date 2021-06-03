@@ -13,6 +13,8 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.StampedLock;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
@@ -292,39 +294,59 @@ public class PersistenceManagerImpl implements PersistenceManager {
       if (log.isTraceEnabled()) {
          log.trace("Polling Store availability");
       }
-      // This maybe will always be empty - used when all stores are available
-      Maybe<NonBlockingStore<Object, Object>> allAvailableMaybe = Maybe.defer(() -> {
-         if (unavailableExceptionMessage != null) {
-            unavailableExceptionMessage = null;
-            return Maybe.fromCompletionStage(cacheNotifier.notifyPersistenceAvailabilityChanged(true)
-               .thenApply(CompletableFutures.toNullFunction()));
+      AtomicReference<NonBlockingStore<?, ?>> firstFailedStore = new AtomicReference<>();
+      long stamp = acquireReadLock();
+      boolean release = true;
+      try {
+         AggregateCompletionStage<Void> stageBuilder = CompletionStages.aggregateCompletionStage();
+         for (StoreStatus storeStatus : stores) {
+            CompletionStage<Boolean> availableStage = storeStatus.store.isAvailable();
+            stageBuilder.dependsOn(availableStage.thenCompose(isAvailable -> {
+               storeStatus.availability = isAvailable;
+               if (!isAvailable) {
+                  NonBlockingStore<?, ?> unavailableStore = storeStatus.store;
+                  if (firstFailedStore.compareAndSet(null, unavailableStore)) {
+                     return notifyIfAvailabilityChanged(unavailableStore);
+                  }
+               }
+               return CompletableFutures.completedNull();
+            }));
          }
-         return Maybe.empty();
-      });
-      return Completable.using(this::acquireReadLock,
-            ignore -> Flowable.fromIterable(stores)
-                  .flatMapMaybe(storeStatus -> {
-                     CompletionStage<Boolean> availableStage = storeStatus.store.isAvailable();
-                     return Maybe.fromCompletionStage(availableStage.thenApply(isAvailable -> {
-                        storeStatus.availability = isAvailable;
-                        if (!isAvailable) {
-                           return storeStatus.store();
-                        }
-                        return null;
-                     }));
-                  }).firstElement()
-                  // If it is empty that means all stores were available
-                  .switchIfEmpty(allAvailableMaybe)
-                  .concatMapCompletable(unavailableStore -> {
-                     if (unavailableExceptionMessage == null) {
-                        log.debugf("Store %s is unavailable!", unavailableStore);
-                        unavailableExceptionMessage = "Store " + unavailableStore + " is unavailable";
-                        return Completable.fromCompletionStage(cacheNotifier.notifyPersistenceAvailabilityChanged(false));
-                     }
-                     return Completable.complete();
-                  }),
-            this::releaseReadLock)
-            .toCompletionStage(null);
+         CompletionStage<Void> stage = stageBuilder.freeze();
+         if (CompletionStages.isCompletedSuccessfully(stage)) {
+            if (firstFailedStore.get() == null) {
+               stage = stage.thenCompose(__ -> notifyIfAvailabilityChanged(null));
+            }
+            return stage;
+         } else {
+            release = false;
+            return stage.thenCompose(__ -> notifyIfAvailabilityChanged(firstFailedStore.get()))
+                        .whenComplete((e, throwable) -> releaseReadLock(stamp));
+         }
+      } finally {
+         if (release) {
+            releaseReadLock(stamp);
+         }
+      }
+   }
+
+   private CompletionStage<Void> notifyIfAvailabilityChanged(NonBlockingStore<?, ?> unavailableStore) {
+      if (unavailableStore != null) {
+         if (unavailableExceptionMessage == null) {
+            log.debugf("Store %s is unavailable!", unavailableStore);
+            unavailableExceptionMessage = "Store " + unavailableStore + " is unavailable";
+            CompletionStage<Void> notificationStage = cacheNotifier.notifyPersistenceAvailabilityChanged(false);
+            return notificationStage;
+         }
+      } else {
+         // All stores are available
+         if (unavailableExceptionMessage != null) {
+            log.debugf("All stores are now available");
+            unavailableExceptionMessage = null;
+            return cacheNotifier.notifyPersistenceAvailabilityChanged(true);
+         }
+      }
+      return CompletableFutures.completedNull();
    }
 
    @Override
@@ -649,7 +671,7 @@ public class PersistenceManagerImpl implements PersistenceManager {
       try {
          checkStoreAvailability();
          if (log.isTraceEnabled()) {
-            log.tracef("Purging entries from stores");
+            log.tracef("Purging entries from stores on cache %s", cache.getName());
          }
          AggregateCompletionStage<Void> aggregateCompletionStage = CompletionStages.aggregateCompletionStage();
          for (StoreStatus storeStatus : stores) {
@@ -670,46 +692,70 @@ public class PersistenceManagerImpl implements PersistenceManager {
 
    @Override
    public CompletionStage<Void> clearAllStores(Predicate<? super StoreConfiguration> predicate) {
-      return Completable.using(
-            this::acquireReadLock,
-            ignore -> {
-               checkStoreAvailability();
-               if (log.isTraceEnabled()) {
-                  log.tracef("Clearing all stores");
-               }
-               return Flowable.fromIterable(stores)
-                     .filter(storeStatus ->
-                           !storeStatus.characteristics.contains(Characteristic.READ_ONLY)
-                                 && predicate.test(storeStatus.config))
-                     // Let the clear work in parallel across the stores
-                     .flatMapCompletable(storeStatus -> Completable.fromCompletionStage(
-                           storeStatus.store.clear()));
-            },
-            this::releaseReadLock
-      ).toCompletionStage(null);
+      long stamp = acquireReadLock();
+      boolean release = true;
+      try {
+         checkStoreAvailability();
+         if (log.isTraceEnabled()) {
+            log.tracef("Clearing all stores");
+         }
+         // Let the clear work in parallel across the stores
+         AggregateCompletionStage<Void> stageBuilder = CompletionStages.aggregateCompletionStage();
+         for (StoreStatus storeStatus : stores) {
+            if (!storeStatus.characteristics.contains(Characteristic.READ_ONLY)
+                && predicate.test(storeStatus.config)) {
+               stageBuilder.dependsOn(storeStatus.store.clear());
+            }
+         }
+         CompletionStage<Void> stage = stageBuilder.freeze();
+         if (CompletionStages.isCompletedSuccessfully(stage)) {
+            return stage;
+         } else {
+            release = false;
+            return stage.whenComplete((e, throwable) -> releaseReadLock(stamp));
+         }
+      } finally {
+         if (release) {
+            releaseReadLock(stamp);
+         }
+      }
    }
 
    @Override
    public CompletionStage<Boolean> deleteFromAllStores(Object key, int segment, Predicate<? super StoreConfiguration> predicate) {
-      return Single.using(
-            this::acquireReadLock,
-            ignore -> {
-               checkStoreAvailability();
-               if (log.isTraceEnabled()) {
-                  log.tracef("Deleting entry for key %s from stores", key);
-               }
-               return Flowable.fromIterable(stores)
-                     .filter(storeStatus ->
-                           !storeStatus.characteristics.contains(Characteristic.READ_ONLY)
-                                 && predicate.test(storeStatus.config))
-                     // Let the delete work in parallel across the stores
-                     .flatMapSingle(storeStatus -> Single.fromCompletionStage(
-                           storeStatus.store.delete(segment, key)))
-                     // Can't use any, as we have to reduce to ensure that all stores are updated
-                     .reduce(Boolean.FALSE, (removed1, removed2) -> removed1 || removed2);
-            },
-            this::releaseReadLock
-      ).toCompletionStage();
+      AtomicBoolean removedAny = new AtomicBoolean();
+      long stamp = acquireReadLock();
+      boolean release = true;
+      try {
+         checkStoreAvailability();
+         if (log.isTraceEnabled()) {
+            log.tracef("Deleting entry for key %s from stores", key);
+         }
+         // Let the write work in parallel across the stores
+         AggregateCompletionStage<Void> stageBuilder = CompletionStages.aggregateCompletionStage();
+         for (StoreStatus storeStatus : stores) {
+            if (!storeStatus.characteristics.contains(Characteristic.READ_ONLY)
+                && predicate.test(storeStatus.config)) {
+               stageBuilder.dependsOn(storeStatus.store.delete(segment, key)
+                                     .thenAccept(removed -> {
+                                        // OR
+                                        removedAny.compareAndSet(false, removed);
+                                     }));
+            }
+         }
+         CompletionStage<Void> stage = stageBuilder.freeze();
+         if (CompletionStages.isCompletedSuccessfully(stage)) {
+            return CompletableFutures.booleanStage(removedAny.get());
+         } else {
+            release = false;
+            return stage.thenApply(__ -> removedAny.get())
+                        .whenComplete((e, throwable) -> releaseReadLock(stamp));
+         }
+      } finally {
+         if (release) {
+            releaseReadLock(stamp);
+         }
+      }
    }
 
    @Override
@@ -757,58 +803,82 @@ public class PersistenceManagerImpl implements PersistenceManager {
    @Override
    public <K> Publisher<K> publishKeys(IntSet segments, Predicate<? super K> filter, Predicate<? super StoreConfiguration> predicate) {
       return Flowable.using(this::acquireReadLock,
-            ignore -> {
-               checkStoreAvailability();
-               if (log.isTraceEnabled()) {
-                  log.tracef("Publishing keys for segments %s", segments);
-               }
-               for (StoreStatus storeStatus : stores) {
-                  Set<Characteristic> characteristics = storeStatus.characteristics;
-                  if (characteristics.contains(Characteristic.BULK_READ) &&  predicate.test(storeStatus.config)) {
-                     Predicate<? super K> filterToUse;
-                     if (!characteristics.contains(Characteristic.SEGMENTABLE)) {
-                        filterToUse = PersistenceUtil.combinePredicate(segments, keyPartitioner, filter);
-                     } else {
-                        filterToUse = filter;
-                     }
-                     return storeStatus.<K, Object>store().publishKeys(segments, filterToUse);
-                  }
-               }
-               return Flowable.empty();
-            },
-            this::releaseReadLock);
+                            ignore -> {
+                               checkStoreAvailability();
+                               if (log.isTraceEnabled()) {
+                                  log.tracef("Publishing keys for segments %s", segments);
+                               }
+                               for (StoreStatus storeStatus : stores) {
+                                  Set<Characteristic> characteristics = storeStatus.characteristics;
+                                  if (characteristics.contains(Characteristic.BULK_READ) && predicate.test(storeStatus.config)) {
+                                     Predicate<? super K> filterToUse;
+                                     if (!characteristics.contains(Characteristic.SEGMENTABLE) ) {
+                                        filterToUse = PersistenceUtil.combinePredicate(segments, keyPartitioner, filter);
+                                     } else {
+                                        filterToUse = filter;
+                                     }
+                                     return storeStatus.<K, Object>store().publishKeys(segments, filterToUse);
+                                  }
+                               }
+                               return Flowable.empty();
+                            },
+                            this::releaseReadLock);
    }
 
    @Override
    public <K, V> CompletionStage<MarshallableEntry<K, V>> loadFromAllStores(Object key, boolean localInvocation,
-         boolean includeStores) {
+                                                                            boolean includeStores) {
       return loadFromAllStores(key, keyPartitioner.getSegment(key), localInvocation, includeStores);
    }
 
    @Override
-   public <K, V> CompletionStage<MarshallableEntry<K, V>> loadFromAllStores(Object key, int segment,
-         boolean localInvocation, boolean includeStores) {
-      return Maybe.using(
-            this::acquireReadLock,
-            ignore -> {
-               checkStoreAvailability();
-               if (log.isTraceEnabled()) {
-                  log.tracef("Loading entry for key %s with segment %d", key, segment);
-               }
-               return Flowable.fromIterable(stores)
-                     .filter(storeStatus -> allowLoad(storeStatus, localInvocation, includeStores))
-                     // Only do 1 request at a time
-                     .concatMapMaybe(storeStatus -> Maybe.fromCompletionStage(
-                           storeStatus.<K, V>store().load(segmentOrZero(storeStatus, segment), key)), 1)
-                     .firstElement();
-            },
-            this::releaseReadLock
-      ).toCompletionStage(null);
+   public <K, V> CompletionStage<MarshallableEntry<K, V>>
+   loadFromAllStores(Object key, int segment, boolean localInvocation, boolean includeStores) {
+      long stamp = acquireReadLock();
+      boolean release = true;
+      try {
+         checkStoreAvailability();
+         if (log.isTraceEnabled()) {
+            log.tracef("Loading entry for key %s with segment %d", key, segment);
+         }
+         Iterator<StoreStatus> iterator = stores.iterator();
+         CompletionStage<MarshallableEntry<K, V>> stage = loadFromStoresIterator(key, segment, iterator, localInvocation, includeStores);
+         if (CompletionStages.isCompletedSuccessfully(stage)) {
+            return stage;
+         } else {
+            release = false;
+            return stage.whenComplete((e, throwable) -> releaseReadLock(stamp));
+         }
+      } finally {
+         if (release) {
+            releaseReadLock(stamp);
+         }
+      }
+   }
+
+   private <K, V> CompletionStage<MarshallableEntry<K, V>>
+   loadFromStoresIterator(Object key, int segment, Iterator<StoreStatus> iterator, boolean localInvocation, boolean includeStores) {
+      while (iterator.hasNext()) {
+         StoreStatus storeStatus = iterator.next();
+         NonBlockingStore<K, V> store = storeStatus.store();
+         if (!allowLoad(storeStatus, localInvocation, includeStores)) {
+            continue;
+         }
+         CompletionStage<MarshallableEntry<K, V>> loadStage = store.load(segmentOrZero(storeStatus, segment), key);
+         return loadStage.thenCompose(e -> {
+            if (e != null) {
+               return CompletableFuture.completedFuture(e);
+            } else {
+               return loadFromStoresIterator(key, segment, iterator, localInvocation, includeStores);
+            }
+         });
+      }
+      return CompletableFutures.completedNull();
    }
 
    private boolean allowLoad(StoreStatus storeStatus, boolean localInvocation, boolean includeStores) {
       return !storeStatus.characteristics.contains(Characteristic.WRITE_ONLY) && (localInvocation || !isLocalOnlyLoader(storeStatus.store)) &&
-            (includeStores || storeStatus.characteristics.contains(Characteristic.READ_ONLY) || storeStatus.config.ignoreModifications());
+             (includeStores || storeStatus.characteristics.contains(Characteristic.READ_ONLY) || storeStatus.config.ignoreModifications());
    }
 
    private boolean isLocalOnlyLoader(NonBlockingStore store) {
@@ -880,20 +950,32 @@ public class PersistenceManagerImpl implements PersistenceManager {
    @Override
    public CompletionStage<Void> writeToAllNonTxStores(MarshallableEntry marshalledEntry, int segment,
          Predicate<? super StoreConfiguration> predicate, long flags) {
-      return Completable.using(
-            this::acquireReadLock,
-            ignore -> {
-               checkStoreAvailability();
-               if (log.isTraceEnabled()) {
-                  log.tracef("Writing entry %s for with segment: %d", marshalledEntry, segment);
-               }
-               return Flowable.fromIterable(stores)
-                     .filter(storeStatus -> shouldWrite(storeStatus, predicate, flags))
-                     // Let the write work in parallel across the stores
-                     .flatMapCompletable(storeStatus -> Completable.fromCompletionStage(storeStatus.store.write(segmentOrZero(storeStatus, segment), marshalledEntry)));
-            },
-            this::releaseReadLock
-      ).toCompletionStage(null);
+      long stamp = acquireReadLock();
+      boolean release = true;
+      try {
+         checkStoreAvailability();
+         if (log.isTraceEnabled()) {
+            log.tracef("Writing entry %s for with segment: %d", marshalledEntry, segment);
+         }
+         // Let the write work in parallel across the stores
+         AggregateCompletionStage<Void> stageBuilder = CompletionStages.aggregateCompletionStage();
+         for (StoreStatus storeStatus : stores) {
+            if (shouldWrite(storeStatus, predicate, flags)) {
+               stageBuilder.dependsOn(storeStatus.store.write(segment, marshalledEntry));
+            }
+         }
+         CompletionStage<Void> stage = stageBuilder.freeze();
+         if (CompletionStages.isCompletedSuccessfully(stage)) {
+            return stage;
+         } else {
+            release = false;
+            return stage.whenComplete((e, throwable) -> releaseReadLock(stamp));
+         }
+      } finally {
+         if (release) {
+            releaseReadLock(stamp);
+         }
+      }
    }
 
    private int segmentOrZero(StoreStatus storeStatus, int segment) {
@@ -923,39 +1005,63 @@ public class PersistenceManagerImpl implements PersistenceManager {
    @Override
    public CompletionStage<Void> commitAllTxStores(TxInvocationContext<AbstractCacheTransaction> txInvocationContext,
          Predicate<? super StoreConfiguration> predicate) {
-      return Completable.using(
-            this::acquireReadLock,
-            ignore -> {
-               checkStoreAvailability();
-               if (log.isTraceEnabled()) {
-                  log.tracef("Committing transaction %s to stores", txInvocationContext);
-               }
-               return Flowable.fromIterable(stores)
-                     .filter(storeStatus -> shouldPerformTransactionOperation(storeStatus, predicate))
-                     // Let the commit work in parallel across the stores
-                     .flatMapCompletable(storeStatus -> Completable.fromCompletionStage(storeStatus.store.commit(txInvocationContext.getTransaction())));
-            },
-            this::releaseReadLock
-      ).toCompletionStage(null);
+      long stamp = acquireReadLock();
+      boolean release = true;
+      try {
+         checkStoreAvailability();
+         if (log.isTraceEnabled()) {
+            log.tracef("Committing transaction %s to stores", txInvocationContext);
+         }
+         // Let the commit work in parallel across the stores
+         AggregateCompletionStage<Void> stageBuilder = CompletionStages.aggregateCompletionStage();
+         for (StoreStatus storeStatus : stores) {
+            if (shouldPerformTransactionOperation(storeStatus, predicate)) {
+               stageBuilder.dependsOn(storeStatus.store.commit(txInvocationContext.getTransaction()));
+            }
+         }
+         CompletionStage<Void> stage = stageBuilder.freeze();
+         if (CompletionStages.isCompletedSuccessfully(stage)) {
+            return stage;
+         } else {
+            release = false;
+            return stage.whenComplete((e, throwable) -> releaseReadLock(stamp));
+         }
+      } finally {
+         if (release) {
+            releaseReadLock(stamp);
+         }
+      }
    }
 
    @Override
    public CompletionStage<Void> rollbackAllTxStores(TxInvocationContext<AbstractCacheTransaction> txInvocationContext,
          Predicate<? super StoreConfiguration> predicate) {
-      return Completable.using(
-            this::acquireReadLock,
-            ignore -> {
-               checkStoreAvailability();
-               if (log.isTraceEnabled()) {
-                  log.tracef("Rolling back transaction %s for stores", txInvocationContext);
-               }
-               return Flowable.fromIterable(stores)
-                     .filter(storeStatus -> shouldPerformTransactionOperation(storeStatus, predicate))
-                     // Let the rollback work in parallel across the stores
-                     .flatMapCompletable(storeStatus -> Completable.fromCompletionStage(storeStatus.store.rollback(txInvocationContext.getTransaction())));
-            },
-            this::releaseReadLock
-      ).toCompletionStage(null);
+      long stamp = acquireReadLock();
+      boolean release = true;
+      try {
+         checkStoreAvailability();
+         if (log.isTraceEnabled()) {
+            log.tracef("Rolling back transaction %s for stores", txInvocationContext);
+         }
+         // Let the rollback work in parallel across the stores
+         AggregateCompletionStage<Void> stageBuilder = CompletionStages.aggregateCompletionStage();
+         for (StoreStatus storeStatus : stores) {
+            if (shouldPerformTransactionOperation(storeStatus, predicate)) {
+               stageBuilder.dependsOn(storeStatus.store.rollback(txInvocationContext.getTransaction()));
+            }
+         }
+         CompletionStage<Void> stage = stageBuilder.freeze();
+         if (CompletionStages.isCompletedSuccessfully(stage)) {
+            return stage;
+         } else {
+            release = false;
+            return stage.whenComplete((e, throwable) -> releaseReadLock(stamp));
+         }
+      } finally {
+         if (release) {
+            releaseReadLock(stamp);
+         }
+      }
    }
 
    private boolean shouldPerformTransactionOperation(StoreStatus storeStatus, Predicate<? super StoreConfiguration> predicate) {
@@ -1230,7 +1336,7 @@ public class PersistenceManagerImpl implements PersistenceManager {
       CompletionStage<Void> handleFlowables(NonBlockingStore<K, V> store, int publisherCount,
             Flowable<NonBlockingStore.SegmentedPublisher<Object>> removeFlowable,
             Flowable<NonBlockingStore.SegmentedPublisher<MarshallableEntry<K, V>>> putFlowable);
-   };
+   }
 
    /**
     * Provides a function that groups entries by their segments (via keyPartitioner).
@@ -1255,36 +1361,62 @@ public class PersistenceManagerImpl implements PersistenceManager {
 
    @Override
    public CompletionStage<Boolean> addSegments(IntSet segments) {
-      return Completable.using(
-            this::acquireReadLock,
-            ignore -> {
-               checkStoreAvailability();
-               if (log.isTraceEnabled()) {
-                  log.tracef("Adding segments %s to stores", segments);
-               }
-               return Flowable.fromIterable(stores)
-                     .filter(PersistenceManagerImpl::shouldInvokeSegmentMethods)
-                     .flatMapCompletable(storeStatus -> Completable.fromCompletionStage(storeStatus.store.addSegments(segments)));
-            },
-            this::releaseReadLock
-      ).toCompletionStage(allSegmentedOrShared);
+      long stamp = acquireReadLock();
+      boolean release = true;
+      try {
+         checkStoreAvailability();
+         if (log.isTraceEnabled()) {
+            log.tracef("Adding segments %s to stores", segments);
+         }
+         // Let the add work in parallel across the stores
+         AggregateCompletionStage<Boolean> stageBuilder = CompletionStages.aggregateCompletionStage(allSegmentedOrShared);
+         for (StoreStatus storeStatus : stores) {
+            if (shouldInvokeSegmentMethods(storeStatus)) {
+               stageBuilder.dependsOn(storeStatus.store.addSegments(segments));
+            }
+         }
+         CompletionStage<Boolean> stage = stageBuilder.freeze();
+         if (CompletionStages.isCompletedSuccessfully(stage)) {
+            return stage;
+         } else {
+            release = false;
+            return stage.whenComplete((e, throwable) -> releaseReadLock(stamp));
+         }
+      } finally {
+         if (release) {
+            releaseReadLock(stamp);
+         }
+      }
    }
 
    @Override
    public CompletionStage<Boolean> removeSegments(IntSet segments) {
-      return Completable.using(
-            this::acquireReadLock,
-            ignore -> {
-               checkStoreAvailability();
-               if (log.isTraceEnabled()) {
-                  log.tracef("Removing segments %s from stores", segments);
-               }
-               return Flowable.fromIterable(stores)
-                     .filter(PersistenceManagerImpl::shouldInvokeSegmentMethods)
-                     .flatMapCompletable(storeStatus -> Completable.fromCompletionStage(storeStatus.store.removeSegments(segments)));
-            },
-            this::releaseReadLock
-      ).toCompletionStage(allSegmentedOrShared);
+      long stamp = acquireReadLock();
+      boolean release = true;
+      try {
+         checkStoreAvailability();
+         if (log.isTraceEnabled()) {
+            log.tracef("Removing segments %s from stores", segments);
+         }
+         // Let the add work in parallel across the stores
+         AggregateCompletionStage<Boolean> stageBuilder = CompletionStages.aggregateCompletionStage(allSegmentedOrShared);
+         for (StoreStatus storeStatus : stores) {
+            if (shouldInvokeSegmentMethods(storeStatus)) {
+               stageBuilder.dependsOn(storeStatus.store.removeSegments(segments));
+            }
+         }
+         CompletionStage<Boolean> stage = stageBuilder.freeze();
+         if (CompletionStages.isCompletedSuccessfully(stage)) {
+            return stage;
+         } else {
+            release = false;
+            return stage.whenComplete((e, throwable) -> releaseReadLock(stamp));
+         }
+      } finally {
+         if (release) {
+            releaseReadLock(stamp);
+         }
+      }
    }
 
    private static boolean shouldInvokeSegmentMethods(StoreStatus storeStatus) {
