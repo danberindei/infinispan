@@ -1105,7 +1105,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
 
    @Override
    public CompletionStage<Long> approximateSize(IntSet segments) {
-      if (!segmented) {
+      if (!segmented && segments.size() < ctx.getCache().getCacheConfiguration().clustering().hash().numSegments()) {
          return Flowable.fromPublisher(publishKeys(segments, null)).count().toCompletionStage();
       }
       return blockingManager.supplyBlocking(() -> blockingApproximateSize(segments), "approximateSize");
