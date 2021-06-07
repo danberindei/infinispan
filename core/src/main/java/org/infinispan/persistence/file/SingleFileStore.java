@@ -534,67 +534,62 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
    }
 
    private void blockingWrite(int segment, MarshallableEntry<? extends K, ? extends V> marshalledEntry) {
+      // serialize cache value
+      org.infinispan.commons.io.ByteBuffer key = marshalledEntry.getKeyBytes();
+      org.infinispan.commons.io.ByteBuffer data = marshalledEntry.getValueBytes();
+      org.infinispan.commons.io.ByteBuffer metadata = marshalledEntry.getMetadataBytes();
+      org.infinispan.commons.io.ByteBuffer internalMetadata = marshalledEntry.getInternalMetadataBytes();
+
+      // allocate file entry and store in cache file
+      int metadataLength = metadata == null ? 0 : metadata.getLength() + TIMESTAMP_BYTES;
+      int internalMetadataLength = internalMetadata == null ? 0 : internalMetadata.getLength();
+      int len = KEY_POS_11_0 + key.getLength() + data.getLength() + metadataLength + internalMetadataLength;
+
+      long stamp = resizeLock.readLock();
       try {
-         // serialize cache value
-         org.infinispan.commons.io.ByteBuffer key = marshalledEntry.getKeyBytes();
-         org.infinispan.commons.io.ByteBuffer data = marshalledEntry.getValueBytes();
-         org.infinispan.commons.io.ByteBuffer metadata = marshalledEntry.getMetadataBytes();
-         org.infinispan.commons.io.ByteBuffer internalMetadata = marshalledEntry.getInternalMetadataBytes();
+         Map<K, FileEntry> segmentEntries = getSegmentEntries(segment);
+         if (segmentEntries == null) {
+            // We don't own the segment
+            return;
+         }
 
-         // allocate file entry and store in cache file
-         int metadataLength = metadata == null ? 0 : metadata.getLength() + TIMESTAMP_BYTES;
-         int internalMetadataLength = internalMetadata == null ? 0 : internalMetadata.getLength();
-         int len = KEY_POS_11_0 + key.getLength() + data.getLength() + metadataLength + internalMetadataLength;
-         FileEntry newEntry;
-         FileEntry oldEntry = null;
-         long stamp = resizeLock.readLock();
-         try {
-            Map<K, FileEntry> segmentEntries = getSegmentEntries(segment);
-            if (segmentEntries == null) {
-               // We don't own the segment
-               return;
-            }
+         FileEntry newEntry = allocate(len);
+         newEntry = new FileEntry(newEntry.offset, newEntry.size, key.getLength(), data.getLength(), metadataLength, internalMetadataLength, marshalledEntry.expiryTime());
 
-            newEntry = allocate(len);
-            newEntry = new FileEntry(newEntry.offset, newEntry.size, key.getLength(), data.getLength(), metadataLength, internalMetadataLength, marshalledEntry.expiryTime());
+         ByteBuffer buf = ByteBuffer.allocate(len);
+         newEntry.writeToBuf(buf);
+         buf.put(key.getBuf(), key.getOffset(), key.getLength());
+         buf.put(data.getBuf(), data.getOffset(), data.getLength());
+         if (metadata != null) {
+            buf.put(metadata.getBuf(), metadata.getOffset(), metadata.getLength());
 
-            ByteBuffer buf = ByteBuffer.allocate(len);
-            newEntry.writeToBuf(buf);
-            buf.put(key.getBuf(), key.getOffset(), key.getLength());
-            buf.put(data.getBuf(), data.getOffset(), data.getLength());
-            if (metadata != null) {
-               buf.put(metadata.getBuf(), metadata.getOffset(), metadata.getLength());
-
-               // Only write created & lastUsed if expiryTime is set
-               if (newEntry.expiryTime > 0) {
-                  buf.putLong(marshalledEntry.created());
-                  buf.putLong(marshalledEntry.lastUsed());
-               }
-            }
-            if (internalMetadata != null) {
-               buf.put(internalMetadata.getBuf(), internalMetadata.getOffset(), internalMetadata.getLength());
-            }
-            buf.flip();
-            channel.write(buf, newEntry.offset);
-            if (trace)
-               log.tracef("Wrote entry %s:%d at %d:%d", marshalledEntry.getKey(), len, newEntry.offset, newEntry.size);
-
-            // add the new entry to in-memory index
-            oldEntry = segmentEntries.put(marshalledEntry.getKey(), newEntry);
-
-            // if we added an entry, check if we need to evict something
-            if (oldEntry == null)
-               oldEntry = evict();
-         } finally {
-            // in case we replaced or evicted an entry, add to freeList
-            try {
-               free(oldEntry);
-            } finally {
-               resizeLock.unlockRead(stamp);
+            // Only write created & lastUsed if expiryTime is set
+            if (newEntry.expiryTime > 0) {
+               buf.putLong(marshalledEntry.created());
+               buf.putLong(marshalledEntry.lastUsed());
             }
          }
+         if (internalMetadata != null) {
+            buf.put(internalMetadata.getBuf(), internalMetadata.getOffset(), internalMetadata.getLength());
+         }
+         buf.flip();
+         channel.write(buf, newEntry.offset);
+         if (trace)
+            log.tracef("Wrote entry %s:%d at %d:%d", marshalledEntry.getKey(), len, newEntry.offset, newEntry.size);
+
+         // add the new entry to in-memory index
+         FileEntry oldEntry = segmentEntries.put(marshalledEntry.getKey(), newEntry);
+
+         // if we added an entry, check if we need to evict something
+         if (oldEntry == null)
+            oldEntry = evict();
+
+         // in case we replaced or evicted an entry, add to freeList
+         free(oldEntry);
       } catch (Exception e) {
          throw new PersistenceException(e);
+      } finally {
+         resizeLock.unlockRead(stamp);
       }
    }
 
