@@ -712,7 +712,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
          }
 
          // Perform the actual read holding only the FileEntry lock
-         return blockingManager.supplyBlocking(() -> readFileEntry(fe, key, true, true), "sfs-load");
+         return blockingManager.supplyBlocking(() -> readFromDisk(fe, key, true, true), "sfs-load");
       }
       return blockingManager.supplyBlocking(() -> blockingLoad(segment, key, true, true), "sfs-load");
    }
@@ -724,7 +724,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
          return null;
 
       // Perform the actual read holding only the FileEntry lock
-      return readFileEntry(fe, key, loadValue, loadMetadata);
+      return readFromDisk(fe, key, loadValue, loadMetadata);
    }
 
    private FileEntry getFileEntryWithReadLock(int segment, Object key, long stamp) {
@@ -754,7 +754,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
       return fe;
    }
 
-   private MarshallableEntry<K, V> readFileEntry(FileEntry fe, Object key, boolean loadValue, boolean loadMetadata) {
+   private MarshallableEntry<K, V> readFromDisk(FileEntry fe, Object key, boolean loadValue, boolean loadMetadata) {
       org.infinispan.commons.io.ByteBuffer valueBb = null;
 
       // If we only require the key, then no need to read disk
@@ -1086,7 +1086,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
                   it.set(null);
 
                   // Already "locked" by being removed from the segmentEntries map
-                  MarshallableEntry<K, V> entry = readFileEntry(fe, next.getKey(), false, false);
+                  MarshallableEntry<K, V> entry = readFromDisk(fe, next.getKey(), false, false);
                   processor.onNext(entry);
 
                   try {
