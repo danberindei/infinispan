@@ -665,8 +665,10 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
       long stamp = resizeLock.tryReadLock();
       if (stamp != 0) {
          FileEntry fe = deleteWithReadLock(segment, key);
-         if (fe == null)
+         if (fe == null) {
+            resizeLock.unlockRead(stamp);
             return CompletableFutures.completedFalse();
+         }
 
          return blockingManager.supplyBlocking(() -> deleteInFile(stamp, fe), "sfs-delete");
       }
@@ -680,6 +682,9 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
       return deleteInFile(stamp, fe);
    }
 
+   /**
+    * Mark the entry as deleted on disk and release the read lock.
+    */
    private boolean deleteInFile(long stamp, FileEntry fe) {
       try {
          free(fe);
@@ -706,6 +711,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
       // Avoid switching threads if there is nothing to load
       long stamp = resizeLock.tryReadLock();
       if (stamp != 0) {
+         // Acquires the FileEntry lock and releases the read lock
          FileEntry fe = getFileEntryWithReadLock(segment, key, stamp);
          if (fe == null) {
             return CompletableFutures.completedNull();
@@ -714,6 +720,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
          // Perform the actual read holding only the FileEntry lock
          return blockingManager.supplyBlocking(() -> readFromDisk(fe, key, true, true), "sfs-load");
       }
+      // Someone is holding the write lock
       return blockingManager.supplyBlocking(() -> blockingLoad(segment, key, true, true), "sfs-load");
    }
 
@@ -727,6 +734,9 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
       return readFromDisk(fe, key, loadValue, loadMetadata);
    }
 
+   /**
+    * Get the file entry from the segment map and release the read lock
+    */
    private FileEntry getFileEntryWithReadLock(int segment, Object key, long stamp) {
       final FileEntry fe;
       try {
