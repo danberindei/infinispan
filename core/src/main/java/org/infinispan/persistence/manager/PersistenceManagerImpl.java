@@ -782,7 +782,8 @@ public class PersistenceManagerImpl implements PersistenceManager {
                   Set<Characteristic> characteristics = storeStatus.characteristics;
                   if (characteristics.contains(Characteristic.BULK_READ) &&  predicate.test(storeStatus.config)) {
                      Predicate<? super K> filterToUse;
-                     if (!characteristics.contains(Characteristic.SEGMENTABLE)) {
+                     if (!characteristics.contains(Characteristic.SEGMENTABLE) &&
+                         !segments.containsAll(IntSets.immutableRangeSet(segmentCount))) {
                         filterToUse = PersistenceUtil.combinePredicate(segments, keyPartitioner, filter);
                      } else {
                         filterToUse = filter;
@@ -803,17 +804,17 @@ public class PersistenceManagerImpl implements PersistenceManager {
    @Override
    public <K> Publisher<K> publishKeys(IntSet segments, Predicate<? super K> filter, Predicate<? super StoreConfiguration> predicate) {
       return Flowable.using(this::acquireReadLock,
-                            ignore -> {
-                               checkStoreAvailability();
-                               if (log.isTraceEnabled()) {
-                                  log.tracef("Publishing keys for segments %s", segments);
-                               }
-                               for (StoreStatus storeStatus : stores) {
-                                  Set<Characteristic> characteristics = storeStatus.characteristics;
-                                  if (characteristics.contains(Characteristic.BULK_READ) && predicate.test(storeStatus.config)) {
-                                     Predicate<? super K> filterToUse;
-                                     if (!characteristics.contains(Characteristic.SEGMENTABLE) ) {
-                                        filterToUse = PersistenceUtil.combinePredicate(segments, keyPartitioner, filter);
+            ignore -> {
+               checkStoreAvailability();
+               if (log.isTraceEnabled()) {
+                  log.tracef("Publishing keys for segments %s", segments);
+               }
+               for (StoreStatus storeStatus : stores) {
+                  Set<Characteristic> characteristics = storeStatus.characteristics;
+                  if (characteristics.contains(Characteristic.BULK_READ) &&  predicate.test(storeStatus.config)) {
+                     Predicate<? super K> filterToUse;
+                     if (!characteristics.contains(Characteristic.SEGMENTABLE) &&
+                                        !segments.containsAll(IntSets.immutableRangeSet(segmentCount))) {filterToUse = PersistenceUtil.combinePredicate(segments, keyPartitioner, filter);
                                      } else {
                                         filterToUse = filter;
                                      }
