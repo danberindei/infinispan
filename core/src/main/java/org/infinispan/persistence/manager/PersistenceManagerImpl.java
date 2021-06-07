@@ -915,20 +915,32 @@ public class PersistenceManagerImpl implements PersistenceManager {
    @Override
    public CompletionStage<Void> writeToAllNonTxStores(MarshallableEntry marshalledEntry, int segment,
          Predicate<? super StoreConfiguration> predicate, long flags) {
-      return Completable.using(
-            this::acquireReadLock,
-            ignore -> {
-               checkStoreAvailability();
-               if (trace) {
-                  log.tracef("Writing entry %s for with segment: %d", marshalledEntry, segment);
-               }
-               return Flowable.fromIterable(stores)
-                     .filter(storeStatus -> shouldWrite(storeStatus, predicate, flags))
-                     // Let the write work in parallel across the stores
-                     .flatMapCompletable(storeStatus -> Completable.fromCompletionStage(storeStatus.store.write(segmentOrZero(storeStatus, segment), marshalledEntry)));
-            },
-            this::releaseReadLock
-      ).toCompletionStage(null);
+      long stamp = acquireReadLock();
+      boolean done = true;
+      try {
+         checkStoreAvailability();
+         if (trace) {
+            log.tracef("Writing entry %s for with segment: %d", marshalledEntry, segment);
+         }
+         // Let the write work in parallel across the stores
+         AggregateCompletionStage<Void> stageBuilder = CompletionStages.aggregateCompletionStage();
+         for (StoreStatus storeStatus : stores) {
+            if (shouldWrite(storeStatus, predicate, flags)) {
+               stageBuilder.dependsOn(storeStatus.store.write(segment, marshalledEntry));
+            }
+         }
+         CompletionStage<Void> stage = stageBuilder.freeze();
+         if (CompletionStages.isCompletedSuccessfully(stage)) {
+            return stage;
+         } else {
+            done = false;
+            return stage.whenComplete((e, throwable) -> releaseReadLock(stamp));
+         }
+      } finally {
+         if (done) {
+            releaseReadLock(stamp);
+         }
+      }
    }
 
    private int segmentOrZero(StoreStatus storeStatus, int segment) {
