@@ -662,19 +662,26 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
 
    @Override
    public CompletionStage<Boolean> delete(int segment, Object key) {
+      long stamp = resizeLock.tryReadLock();
+      if (stamp != 0) {
+         FileEntry fe = deleteWithReadLock(segment, key);
+         if (fe == null)
+            return CompletableFutures.completedFalse();
+
+         return blockingManager.supplyBlocking(() -> deleteInFile(stamp, fe), "delete");
+      }
+      
       return blockingManager.supplyBlocking(() -> blockingDelete(segment, key), "delete");
    }
 
    private boolean blockingDelete(int segment, Object key) {
       long stamp = resizeLock.readLock();
-      try {
-         Map<K, FileEntry> segmentEntries = getSegmentEntries(segment);
-         if (segmentEntries == null) {
-            // We don't own the segment
-            return false;
-         }
+      FileEntry fe = deleteWithReadLock(segment, key);
+      return deleteInFile(stamp, fe);
+   }
 
-         FileEntry fe = segmentEntries.remove(key);
+   private boolean deleteInFile(long stamp, FileEntry fe) {
+      try {
          free(fe);
          return fe != null;
       } catch (Exception e) {
@@ -682,6 +689,16 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
       } finally {
          resizeLock.unlockRead(stamp);
       }
+   }
+
+   private FileEntry deleteWithReadLock(int segment, Object key) {
+      Map<K, FileEntry> segmentEntries = getSegmentEntries(segment);
+      if (segmentEntries == null) {
+         // We don't own the segment
+         return null;
+      }
+
+      return segmentEntries.remove(key);
    }
 
    @Override
