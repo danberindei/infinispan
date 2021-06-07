@@ -1344,7 +1344,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
          // We compare the size first, as the entries in the free list must be sorted by size
          int diff = size - fe.size;
          if (diff != 0) return diff;
-         return (offset < fe.offset) ? -1 : ((offset == fe.offset) ? 0 : 1);
+         return Long.compare(offset, fe.offset);
       }
 
       @Override
