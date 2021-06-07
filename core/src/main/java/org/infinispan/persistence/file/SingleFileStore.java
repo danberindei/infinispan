@@ -162,7 +162,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
       freeList = Collections.synchronizedSortedSet(new TreeSet<>());
 
       blockingAddSegments(IntSets.immutableRangeSet(numSegments));
-      return blockingManager.runBlocking(this::blockingStart, "start");
+      return blockingManager.runBlocking(this::blockingStart, "sfs-start");
    }
 
    private void blockingStart() {
@@ -203,7 +203,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
 
    @Override
    public CompletionStage<Void> stop() {
-      return ctx.getBlockingManager().runBlocking(this::blockingStop, "stop");
+      return ctx.getBlockingManager().runBlocking(this::blockingStop, "sfs-stop");
    }
 
    private void blockingStop() {
@@ -530,7 +530,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
 
    @Override
    public CompletionStage<Void> write(int segment, MarshallableEntry<? extends K, ? extends V> marshalledEntry) {
-      return blockingManager.runBlocking(() -> blockingWrite(segment, marshalledEntry), "write");
+      return blockingManager.runBlocking(() -> blockingWrite(segment, marshalledEntry), "sfs-write");
    }
 
    private void blockingWrite(int segment, MarshallableEntry<? extends K, ? extends V> marshalledEntry) {
@@ -617,7 +617,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
 
    @Override
    public CompletionStage<Void> clear() {
-      return blockingManager.runBlocking(this::blockingClear, "clear");
+      return blockingManager.runBlocking(this::blockingClear, "sfs-clear");
    }
 
    private void blockingClear() {
@@ -668,10 +668,10 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
          if (fe == null)
             return CompletableFutures.completedFalse();
 
-         return blockingManager.supplyBlocking(() -> deleteInFile(stamp, fe), "delete");
+         return blockingManager.supplyBlocking(() -> deleteInFile(stamp, fe), "sfs-delete");
       }
-      
-      return blockingManager.supplyBlocking(() -> blockingDelete(segment, key), "delete");
+
+      return blockingManager.supplyBlocking(() -> blockingDelete(segment, key), "sfs-delete");
    }
 
    private boolean blockingDelete(int segment, Object key) {
@@ -1059,7 +1059,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
       UnicastProcessor<MarshallableEntry<K, V>> processor = UnicastProcessor.create();
       blockingManager.runBlocking(() -> {
          blockingPurgeExpired(now, processor);
-      }, "purgeExpired");
+      }, "sfs-purgeExpired");
       return Flowable.fromPublisher(processor.serialize());
    }
 
@@ -1168,7 +1168,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
          // Nothing to do
          return CompletableFutures.completedNull();
       }
-      return blockingManager.runBlocking(() -> blockingAddSegments(segments), "addSegments");
+      return blockingManager.runBlocking(() -> blockingAddSegments(segments), "sfs-addSegments");
    }
 
    private void blockingAddSegments(IntSet segments) {
@@ -1197,7 +1197,7 @@ public class SingleFileStore<K, V> implements NonBlockingStore<K, V> {
                         .doOnNext(k -> delete(0, k))
                         .ignoreElements().toCompletionStage(null);
       }
-      return blockingManager.runBlocking(() -> blockingRemoveSegments(segments), "removeSegments");
+      return blockingManager.runBlocking(() -> blockingRemoveSegments(segments), "sfs-removeSegments");
    }
 
    private void blockingRemoveSegments(IntSet segments) {
