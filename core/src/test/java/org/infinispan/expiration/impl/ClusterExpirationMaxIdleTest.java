@@ -171,12 +171,8 @@ public class ClusterExpirationMaxIdleTest extends MultipleCacheManagersTest {
       AdvancedCache<Object, String> primaryOwner = cache0.getAdvancedCache();
       AdvancedCache<Object, String> backupOwner = cache1.getAdvancedCache();
       Object key = createKey(primaryOwner, backupOwner);
-      primaryOwner.put(key, key.toString(), -1, null, 10, TimeUnit.MINUTES);
-
-      // Scattered can pick backup at random - so make sure we know it
-      if (cacheMode == CacheMode.SCATTERED_SYNC) {
-         backupOwner = findScatteredBackup(primaryOwner, key);
-      }
+      // Inserting from cache1 makes it a backup in scattered caches
+      backupOwner.put(key, key.toString(), -1, null, 10, TimeUnit.MINUTES);
 
       assertEquals(key.toString(), primaryOwner.get(key));
       assertEquals(key.toString(), backupOwner.get(key));
@@ -328,13 +324,19 @@ public class ClusterExpirationMaxIdleTest extends MultipleCacheManagersTest {
    private void assertLastUsedUpdate(Object key, long expectedLastUsed, Cache<Object, String> readCache,
                                      Cache<Object, String> otherCache) {
       Object storageKey = readCache.getAdvancedCache().getKeyDataConversion().toStorage(key);
-      assertEquals(expectedLastUsed, readCache.getAdvancedCache().getDataContainer().peek(storageKey).getLastUsed());
-      if (touchMode == TouchMode.ASYNC) {
-         eventuallyEquals(expectedLastUsed,
-                          () -> otherCache.getAdvancedCache().getDataContainer().peek(storageKey).getLastUsed());
+      if (touchMode == TouchMode.SYNC) {
+         assertEquals(expectedLastUsed, getLastUsed(readCache, storageKey));
+         assertEquals(expectedLastUsed, getLastUsed(otherCache, storageKey));
       } else {
-         assertEquals(expectedLastUsed, otherCache.getAdvancedCache().getDataContainer().peek(storageKey).getLastUsed());
+         // Normally the touch command is executed synchronously on the reader.
+         // In scattered caches, the touch command is executed synchronously on the primary owner.
+         eventuallyEquals(expectedLastUsed, () -> getLastUsed(readCache, storageKey));
+         eventuallyEquals(expectedLastUsed, () -> getLastUsed(otherCache, storageKey));
       }
+   }
+
+   private long getLastUsed(Cache<Object, String> cache, Object storageKey) {
+      return cache.getAdvancedCache().getDataContainer().peek(storageKey).getLastUsed();
    }
 
    public void testMaxIdleReadNodeDiesPrimary() {
