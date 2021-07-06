@@ -144,9 +144,8 @@ public class NonTxPrimaryOwnerBecomingNonOwnerTest extends MultipleCacheManagers
       beforeCache0Barrier.await(10, TimeUnit.SECONDS);
 
       // Allow the topology update to proceed on cache0
-      final int postJoinTopologyId = joinTopologyId + 1;
-      checkPoint.trigger("allow_topology_" + postJoinTopologyId + "_on_" + address(0));
-      eventuallyEquals(postJoinTopologyId,
+      checkPoint.trigger("allow_topology_" + stateReceivedTopologyId + "_on_" + address(0));
+      eventuallyEquals(stateReceivedTopologyId,
             () -> cache0.getDistributionManager().getCacheTopology().getTopologyId());
 
       // Allow the command to proceed
@@ -160,7 +159,6 @@ public class NonTxPrimaryOwnerBecomingNonOwnerTest extends MultipleCacheManagers
       beforeCache0Barrier.await(10, TimeUnit.SECONDS);
 
       // Allow the topology update to proceed on the other caches
-      checkPoint.trigger("allow_topology_" + stateReceivedTopologyId + "_on_" + address(0));
       checkPoint.trigger("allow_topology_" + stateReceivedTopologyId + "_on_" + address(1));
       checkPoint.trigger("allow_topology_" + stateReceivedTopologyId + "_on_" + address(2));
 

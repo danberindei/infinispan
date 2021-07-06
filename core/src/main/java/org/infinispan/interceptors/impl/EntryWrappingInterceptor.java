@@ -685,27 +685,12 @@ public class EntryWrappingInterceptor extends DDAsyncInterceptor {
    }
 
    private CompletionStage<Void> applyChanges(InvocationContext ctx, WriteCommand command) {
-      stateTransferLock.acquireSharedTopologyLock();
-      try {
-         // We only retry non-tx write commands
-         if (!isInvalidation) {
-            checkTopology(ctx, command);
-         }
-
-         CompletionStage<Void> cs = commitContextEntries(ctx, command);
-         if (!isInvalidation) {
-            // If it was completed successfully, we don't need to check topology as we held the lock during the
-            // entire invocation. If however this is not yet complete we have to double check the topology
-            // after it is complete as we would have no longer held the lock
-            // NOTE: we do not reacquire the lock in the extra check as it only reads the topology id
-            if (!CompletionStages.isCompletedSuccessfully(cs)) {
-               return cs.thenRun(() -> checkTopology(ctx, command));
-            }
-         }
-         return cs;
-      } finally {
-         stateTransferLock.releaseSharedTopologyLock();
+      // Invalidation caches don't set the topology id
+      if (!isInvalidation) {
+         checkTopology(ctx, command);
       }
+
+      return commitContextEntries(ctx, command);
    }
 
    /**
