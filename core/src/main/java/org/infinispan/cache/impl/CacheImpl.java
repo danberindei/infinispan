@@ -9,6 +9,7 @@ import static org.infinispan.context.Flag.PUT_FOR_EXTERNAL_READ;
 import static org.infinispan.context.Flag.ZERO_LOCK_ACQUISITION_TIMEOUT;
 import static org.infinispan.context.InvocationContextFactory.UNBOUNDED;
 import static org.infinispan.util.logging.Log.CONFIG;
+import static org.infinispan.util.logging.Log.CONTAINER;
 
 import java.lang.annotation.Annotation;
 import java.util.Arrays;
@@ -1017,7 +1018,7 @@ public class CacheImpl<K, V> implements AdvancedCache<K, V> {
       if (stateTransferManager != null) {
          stateTransferManager.waitForInitialStateTransferToComplete();
       }
-      if (log.isDebugEnabled()) log.debugf("Started cache %s on %s", getName(), getCacheManager().getAddress());
+      CONTAINER.debugf("Started cache %s on %s", getName(), getCacheManager().getAddress());
    }
 
    @Override
@@ -1059,8 +1060,7 @@ public class CacheImpl<K, V> implements AdvancedCache<K, V> {
    }
 
    private void performImmediateShutdown() {
-      if (log.isDebugEnabled())
-         log.debugf("Stopping cache %s on %s", getName(), getCacheManager().getAddress());
+      CONTAINER.debugf("Stopping cache %s on %s", getName(), getCacheManager().getAddress());
       componentRegistry.stop();
    }
 

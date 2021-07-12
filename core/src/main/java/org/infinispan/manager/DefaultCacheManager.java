@@ -683,7 +683,7 @@ public class DefaultCacheManager implements EmbeddedCacheManager {
       }
 
       try {
-         log.tracef("About to wire and start cache %s", cacheName);
+         CONTAINER.debugf("Constructing and starting cache %s", cacheName);
          if (cache == null) {
             cache = new InternalCacheFactory<K, V>().createCache(c, globalComponentRegistry, cacheName);
             if (cache.getAdvancedCache().getAuthorizationManager() != null) {
