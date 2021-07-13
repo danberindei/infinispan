@@ -35,7 +35,7 @@ public class SyncConsistentHashFactoryTest extends DefaultConsistentHashFactoryT
       if (expectedOwned >= averageOwned) {
          maxDiff = .10f * expectedOwned;
       } else {
-         maxDiff = .25f * expectedOwned;
+         maxDiff = .10f * (expectedOwned + averageOwned);
       }
       return expectedOwned + Math.max(maxDiff, 1);
    }
@@ -60,7 +60,7 @@ public class SyncConsistentHashFactoryTest extends DefaultConsistentHashFactoryT
       int oldSize = nodesWithLoad(oldCH.getMembers(), oldCH.getCapacityFactors());
       int newSize = nodesWithLoad(newCH.getMembers(), newCH.getCapacityFactors());
       int maxSize = Math.max(oldSize, newSize);
-      return Math.max(maxSize, 0.10f * newCH.getNumOwners() * newCH.getNumSegments());
+      return Math.max(maxSize, 0.15f * newCH.getNumOwners() * newCH.getNumSegments());
    }
 
    public void test2() {

@@ -133,7 +133,8 @@ public class ScatteredStateConsumerImpl extends StateConsumerImpl {
    }
 
    @Override
-   protected CompletionStage<Void> handleSegments(boolean startRebalance, IntSet addedSegments, IntSet removedSegments) {
+   protected CompletionStage<Void> handleSegments(boolean startRebalance, IntSet addedSegments, IntSet removedSegments,
+                                                  IntSet transactionOnlySegments) {
       if (!startRebalance) {
          log.trace("This is not a rebalance, not doing anything...");
          return CompletableFutures.completedNull();
